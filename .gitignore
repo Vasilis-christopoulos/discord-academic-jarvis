@@ -1,0 +1,13 @@
+.env
+__pycache__/
+*.pyc
+*.db
+*.log
+venv/
+data/
+vector_store/
+cache/
+logs/
+credentials.json
+
+
