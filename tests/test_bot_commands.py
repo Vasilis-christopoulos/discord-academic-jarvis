@@ -4,8 +4,11 @@ from unittest.mock import AsyncMock, patch, MagicMock
 import discord
 from discord.ext import commands
 
-# Mock the modules that require external APIs
-with patch('rag_module.rag_handler.respond') as mock_rag, \
+# Mock external dependencies before importing main modules
+with patch('supabase.create_client'), \
+     patch('pinecone.Pinecone'), \
+     patch('openai.OpenAI'), \
+     patch('rag_module.rag_handler.respond') as mock_rag, \
      patch('calendar_module.calendar_handler.respond') as mock_cal, \
      patch('fallback_module.fallback_handler.respond') as mock_fb:
     
