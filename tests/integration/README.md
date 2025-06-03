@@ -37,3 +37,4 @@ When adding new integration tests:
 ## Current Integration Tests
 
 - `integration_test_sync_token_error.py`: Tests HTTP 410 error handling in calendar sync
+- `test_query_parser.py`: Tests OpenAI-based natural language query parsing (requires OPENAI_API_KEY)

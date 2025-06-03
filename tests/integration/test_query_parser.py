@@ -1,4 +1,15 @@
-# tests/test_query_parser_integration.py
+# Integration tests for query parser - requires real OpenAI API key
+"""
+Integration tests for the query parser module.
+
+These tests require a real OpenAI API key and make actual API calls to test
+the LangChain-based query parsing functionality. They are excluded from
+regular CI runs and should be run manually when needed.
+
+To run these tests:
+1. Set OPENAI_API_KEY environment variable
+2. Run: pytest tests/integration/test_query_parser.py -v
+"""
 import os
 import pytest
 from datetime import datetime
