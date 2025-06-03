@@ -34,6 +34,7 @@ jobs:
           echo "PINECONE_CALENDAR_INDEX=test-calendar-index" >> $GITHUB_ENV
           echo "SUPABASE_URL=https://test.supabase.co" >> $GITHUB_ENV
           echo "SUPABASE_API_KEY=test_supabase_key_12345" >> $GITHUB_ENV
+          echo "TENANTS_FILE=tests/fixtures/tenants_sample.json" >> $GITHUB_ENV
 
       - name: Run tests
         run: pytest -q --maxfail=1 --disable-warnings
