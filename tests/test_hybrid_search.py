@@ -233,12 +233,12 @@ class TestHybridSearchRelativeBand:
         assert len(result) == 0
 
     def test_hybrid_search_single_weak_match_filtered(self, mock_embed, mock_index):
-        """Test hybrid search when single weak match gets filtered out by threshold."""
-        # Mock query response with single very weak match
+        """Test hybrid search when single weak match gets filtered out by absolute threshold."""
+        # Mock query response with single very weak match below MIN_SCORE
         mock_index.query.return_value = {
             "matches": [
                 {
-                    "score": 0.1,  # Very weak score
+                    "score": 0.1,  # Below MIN_SCORE (0.15)
                     "metadata": {
                         "text": "Weak relevance document",
                         "id": "doc1",
@@ -256,9 +256,36 @@ class TestHybridSearchRelativeBand:
             embed=mock_embed
         )
         
-        # Single weak match should pass through (no threshold filtering with only one result)
+        # Single weak match below MIN_SCORE should be filtered out
+        assert len(result) == 0
+
+    def test_hybrid_search_single_match_above_min_score(self, mock_embed, mock_index):
+        """Test hybrid search when single match is above minimum score threshold."""
+        # Mock query response with single match above MIN_SCORE
+        mock_index.query.return_value = {
+            "matches": [
+                {
+                    "score": 0.2,  # Above MIN_SCORE (0.15)
+                    "metadata": {
+                        "text": "Acceptable relevance document",
+                        "id": "doc1",
+                        "type": "event"
+                    }
+                }
+            ]
+        }
+        
+        result = hybrid_search_relative_band(
+            query="test query",
+            k=5,
+            meta_filter={"type": "event"},
+            index=mock_index,
+            embed=mock_embed
+        )
+        
+        # Single match above MIN_SCORE should pass through
         assert len(result) == 1
-        assert result[0].page_content == "Weak relevance document"
+        assert result[0].page_content == "Acceptable relevance document"
 
     def test_hybrid_search_all_matches_below_threshold(self, mock_embed, mock_index):
         """Test hybrid search when all secondary matches are below relative threshold."""

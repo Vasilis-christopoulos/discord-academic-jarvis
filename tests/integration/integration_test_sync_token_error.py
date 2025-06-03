@@ -5,6 +5,14 @@ Test script to verify HTTP 410 error handling in calendar sync.
 
 import asyncio
 import json
+import sys
+import os
+from pathlib import Path
+
+# Add project root to path for imports
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
+
 from calendar_module.delta_sync import delta_sync_calendar
 from calendar_module.sync_store import get_calendar_sync_token, set_calendar_sync_token
 from utils.logging_config import logger
@@ -12,8 +20,9 @@ from utils.logging_config import logger
 async def test_sync_with_invalid_token():
     """Test sync behavior with an invalid/expired token."""
     
-    # Load context from tenants.json
-    with open('tenants.json', 'r') as f:
+    # Load context from tenants.json (relative to project root)
+    tenants_path = project_root / 'tenants.json'
+    with open(tenants_path, 'r') as f:
         tenants = json.load(f)
     
     # Get the first tenant context
