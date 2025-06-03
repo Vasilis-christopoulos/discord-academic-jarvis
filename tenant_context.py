@@ -1,38 +1,75 @@
-# tenant_context.py
-import os
-import json
+"""
+Tenant Context Module
+
+This module handles loading and managing tenant-specific configuration for Discord guilds
+and channels. It provides a unified interface to access configuration data that includes
+both tenant-level settings (like calendar credentials) and channel-specific overrides.
+
+Configuration Hierarchy:
+1. Base tenant config (from tenants.json) - applies to entire Discord guild
+2. Channel-specific overrides - can override certain tenant settings per channel
+
+The module also ensures that required directories (data storage, vector stores) exist
+before returning the configuration.
+"""
+
 from pathlib import Path
+from typing import Optional, Dict
+from settings import TENANT_CONFIGS
+from utils.logging_config import logger
 
-# This variable can be overridden in tests before calling load_tenant_context
-TENANTS_FILE = "tenants.json"
 
-def load_tenant_context(guild_id: int, channel_id: int) -> dict | None:
+def load_tenant_context(guild_id: int, channel_id: int) -> Optional[Dict]:
     """
-    Dynamically load the tenants JSON, then return either:
-     - channel‑specific config if defined, or
-     - global guild config if not, or
-     - None if the guild isn't in the file.
+    Load and return the merged tenant+channel configuration for a specific Discord guild and channel.
+
+    This function:
+    1. Finds the tenant configuration for the given guild_id
+    2. Applies any channel-specific configuration overrides
+    3. Ensures required directories exist (data_dir, vector_store_path)
+    4. Returns the merged configuration dictionary
+
+    Args:
+        guild_id: Discord guild (server) ID
+        channel_id: Discord channel ID within the guild
+
+    Returns:
+        Dict containing merged tenant+channel configuration, or None if guild not configured
+
+    Configuration Structure:
+        {
+            "guild_id": int,
+            "name": str,
+            "description": str,
+            "calendar_id": str,
+            "tasklist_id": str,
+            "data_dir": str,
+            "vector_store_path": str,
+            "timezone": str,
+            "type": str,  # Channel-specific: "rag", "calendar", "rag-calendar", etc.
+            ... # other channel-specific overrides
+        }
     """
-    if not os.path.exists(TENANTS_FILE):
-        raise FileNotFoundError(f"{TENANTS_FILE} not found")
+    # Search through all configured tenants for matching guild
+    for tenant in TENANT_CONFIGS:
+        if tenant.guild_id == guild_id:
+            # Start with the base tenant configuration
+            cfg = tenant.model_dump()
 
-    with open(TENANTS_FILE, "r") as f:
-        tenants = json.load(f)
+            # Apply channel-specific overrides if this channel is configured
+            chan_cfg = tenant.channels.get(channel_id)
+            if chan_cfg:
+                # Merge channel config into tenant config (channel config takes precedence)
+                cfg.update(chan_cfg.model_dump())
 
-    guild_cfg = tenants.get(str(guild_id))
-    if not guild_cfg:
-        # no such guild
-        return None
+            # Ensure required directories exist for data storage and vector databases
+            Path(cfg["data_dir"]).mkdir(parents=True, exist_ok=True)
+            Path(cfg["vector_store_path"]).mkdir(parents=True, exist_ok=True)
 
-    # Check for channel override
-    chan_cfg = guild_cfg.get("channels", {}).get(str(channel_id))
-    if chan_cfg:
-        cfg = {**guild_cfg, **chan_cfg}
-    else:
-        cfg = guild_cfg
+            logger.debug("ctx-load guild=%s chan=%s cfg=%s", guild_id, channel_id, cfg["name"])
 
-    # Ensure the data and vector dirs exist
-    Path(cfg["data_dir"]).mkdir(parents=True, exist_ok=True)
-    Path(cfg["vector_store_path"]).mkdir(parents=True, exist_ok=True)
+            return cfg
 
-    return cfg
+    # No configuration found for this guild
+    logger.warning("No tenant configuration found for guild_id=%s", guild_id)
+    return None
