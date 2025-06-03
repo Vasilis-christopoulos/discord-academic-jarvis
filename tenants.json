@@ -1,0 +1,27 @@
+{
+    "1361356484478500865": {
+        "name": "mcgill-mma",
+        "description": "McGill MMA server",
+        "calendar_id": "4201e8ab38e36e28046fd0357e9cab0e328ebb38e485fbc65900e276544897a7@group.calendar.google.com",
+        "tasklist_id": "b0s3TnlQbXExN2FKUHliSA",
+        "data_dir": "data/1361356484478500865",
+        "vector_store_path": "rag_module/vector_store/1361356484478500865",
+        "timezone": "America/Toronto",
+        "channels" : {
+            "1361365367204876378": {
+                "name": "test1",
+                "description": "Test channel",
+                "data_dir": "data/1361356484478500865/1361365367204876378",
+                "vector_store_path": "rag_module/vector_store/1361356484478500865/1361365367204876378",
+                "type": "rag-calendar"
+            },
+            "1361365391309275277": {
+                "name": "test2",
+                "description": "Test channel",
+                "data_dir": "data/1361356484478500865/1361365391309275277",
+                "vector_store_path": "rag_module/vector_store/1361356484478500865/1361365391309275277",
+                "type": "rag-calendar"
+            }
+        }
+    }
+}

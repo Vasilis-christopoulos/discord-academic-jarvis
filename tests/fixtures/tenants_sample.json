@@ -1,0 +1,34 @@
+{
+    "111": {
+      "name": "testguild",
+      "description": "Test guild",
+      "calendar_id": "cal@ex.com",
+      "tasklist_id": "test_tasklist_id",
+      "data_dir": "data/111",
+      "vector_store_path": "vector_store/111",
+      "channels": {
+        "222": {
+          "name": "test-channel1",
+          "description": "Test channel",
+          "type": "rag",
+          "data_dir": "data/111/course_A",
+          "vector_store_path": "vector_store/111/course_A"
+        },
+        "333": {
+          "name": "test-channel2",
+          "description": "Test channel",
+          "type": "calendar",
+          "data_dir": "data/111/course_B",
+          "vector_store_path": "vector_store/111/course_B"
+        },
+        "444": {
+          "name": "test-channel3",
+          "description": "Test channel",
+          "type": "rag-calendar",
+          "data_dir": "data/111/course_C",
+          "vector_store_path": "vector_store/111/course_C"
+        }
+      }
+    }
+  }
+  
