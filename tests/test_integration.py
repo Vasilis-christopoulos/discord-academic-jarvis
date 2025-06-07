@@ -35,14 +35,17 @@ class TestIntegrationFlow:
     async def test_full_rag_command_flow(self, sample_tenant_configs):
         """Test complete RAG command flow from Discord to response."""
         with patch('tenant_context.TENANT_CONFIGS', sample_tenant_configs):
-            from main_bot import jarvis
+            import main_bot
             
-            # Create mock Discord context
-            mock_ctx = MagicMock()
-            mock_ctx.guild.id = 12345
-            mock_ctx.channel.id = 67890
-            mock_ctx.author.id = 999
-            mock_ctx.send = AsyncMock()
+            # Create mock Discord interaction
+            mock_interaction = MagicMock()
+            mock_interaction.guild_id = 12345
+            mock_interaction.channel_id = 67890
+            mock_interaction.user.id = 999
+            mock_interaction.response.defer = AsyncMock()
+            mock_interaction.response.send_message = AsyncMock()
+            mock_interaction.response.is_done.return_value = False
+            mock_interaction.followup.send = AsyncMock()
             
             # Mock directory creation
             with patch('tenant_context.Path') as mock_path:
@@ -53,8 +56,8 @@ class TestIntegrationFlow:
                 with patch('main_bot.rag_respond', new_callable=AsyncMock) as mock_rag:
                     mock_rag.return_value = "This is a test RAG response"
                     
-                    # Execute the command
-                    await jarvis(mock_ctx, "rag", rest="What is machine learning?")
+                    # Execute the slash command
+                    await main_bot.jarvis_rag.callback(mock_interaction, "What is machine learning?")
                     
                     # Verify the flow
                     mock_rag.assert_called_once()
@@ -62,20 +65,28 @@ class TestIntegrationFlow:
                     assert call_args[0][0] == "What is machine learning?"  # query
                     assert call_args[0][1]["name"] == "integration-test-channel"  # context
                     
-                    mock_ctx.send.assert_called_once_with("This is a test RAG response")
+                    # Verify response was sent as embed
+                    mock_interaction.response.send_message.assert_called_once()
+                    call_args = mock_interaction.response.send_message.call_args
+                    assert "embeds" in call_args.kwargs
+                    assert len(call_args.kwargs["embeds"]) == 1
+                    assert call_args.kwargs["embeds"][0].description == "This is a test RAG response"
     
     @pytest.mark.asyncio
     async def test_full_calendar_command_flow(self, sample_tenant_configs):
         """Test complete calendar command flow from Discord to response."""
         with patch('tenant_context.TENANT_CONFIGS', sample_tenant_configs):
-            from main_bot import jarvis
+            import main_bot
             
-            # Create mock Discord context
-            mock_ctx = MagicMock()
-            mock_ctx.guild.id = 12345
-            mock_ctx.channel.id = 67890
-            mock_ctx.author.id = 999
-            mock_ctx.send = AsyncMock()
+            # Create mock Discord interaction
+            mock_interaction = MagicMock()
+            mock_interaction.guild_id = 12345
+            mock_interaction.channel_id = 67890
+            mock_interaction.user.id = 999
+            mock_interaction.response.defer = AsyncMock()
+            mock_interaction.response.send_message = AsyncMock()
+            mock_interaction.response.is_done.return_value = False
+            mock_interaction.followup.send = AsyncMock()
             
             # Mock directory creation
             with patch('tenant_context.Path') as mock_path:
@@ -86,8 +97,8 @@ class TestIntegrationFlow:
                 with patch('main_bot.cal_respond', new_callable=AsyncMock) as mock_cal:
                     mock_cal.return_value = "This is a test calendar response"
                     
-                    # Execute the command
-                    await jarvis(mock_ctx, "calendar", rest="What's on my schedule today?")
+                    # Execute the slash command
+                    await main_bot.jarvis_calendar.callback(mock_interaction, "What's on my schedule today?")
                     
                     # Verify the flow
                     mock_cal.assert_called_once()
@@ -95,7 +106,12 @@ class TestIntegrationFlow:
                     assert call_args[0][0] == "What's on my schedule today?"  # query
                     assert call_args[0][1]["name"] == "integration-test-channel"  # context
                     
-                    mock_ctx.send.assert_called_once_with("This is a test calendar response")
+                    # Verify response was sent as embed
+                    mock_interaction.response.send_message.assert_called_once()
+                    call_args = mock_interaction.response.send_message.call_args
+                    assert "embeds" in call_args.kwargs
+                    assert len(call_args.kwargs["embeds"]) == 1
+                    assert call_args.kwargs["embeds"][0].description == "This is a test calendar response"
     
     def test_tenant_loading_and_context_merge(self, sample_tenant_configs):
         """Test tenant loading and context merging."""
