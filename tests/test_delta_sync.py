@@ -177,7 +177,7 @@ class TestDeltaSyncCalendar:
         with patch('calendar_module.delta_sync.get_calendar_sync_token', return_value="test_token"), \
              patch('calendar_module.delta_sync.get_creds', new_callable=AsyncMock) as mock_creds, \
              patch('calendar_module.delta_sync.build') as mock_build, \
-             patch('calendar_module.delta_sync.get_calendar_store') as mock_get_store, \
+             patch('calendar_module.delta_sync.get_vector_store') as mock_get_store, \
              patch('calendar_module.delta_sync.barrier', new_callable=AsyncMock) as mock_barrier, \
              patch('calendar_module.delta_sync.set_calendar_sync_token') as mock_set_token:
             
@@ -229,7 +229,7 @@ class TestDeltaSyncCalendar:
         with patch('calendar_module.delta_sync.get_calendar_sync_token', return_value="test_token"), \
              patch('calendar_module.delta_sync.get_creds', new_callable=AsyncMock), \
              patch('calendar_module.delta_sync.build') as mock_build, \
-             patch('calendar_module.delta_sync.get_calendar_store') as mock_get_store, \
+             patch('calendar_module.delta_sync.get_vector_store') as mock_get_store, \
              patch('calendar_module.delta_sync.safe_delete') as mock_safe_delete, \
              patch('calendar_module.delta_sync.barrier', new_callable=AsyncMock):
             
@@ -267,7 +267,7 @@ class TestDeltaSyncTasks:
         with patch('calendar_module.delta_sync.get_tasks_last_updated', return_value="2025-05-29T00:00:00Z"), \
              patch('calendar_module.delta_sync.get_creds', new_callable=AsyncMock), \
              patch('calendar_module.delta_sync.build') as mock_build, \
-             patch('calendar_module.delta_sync.get_calendar_store') as mock_get_store, \
+             patch('calendar_module.delta_sync.get_vector_store') as mock_get_store, \
              patch('calendar_module.delta_sync.barrier', new_callable=AsyncMock), \
              patch('calendar_module.delta_sync.set_tasks_last_updated') as mock_set_updated:
             
@@ -308,7 +308,7 @@ class TestDeltaSyncTasks:
         with patch('calendar_module.delta_sync.get_tasks_last_updated', return_value="2025-05-29T00:00:00Z"), \
              patch('calendar_module.delta_sync.get_creds', new_callable=AsyncMock), \
              patch('calendar_module.delta_sync.build') as mock_build, \
-             patch('calendar_module.delta_sync.get_calendar_store') as mock_get_store, \
+             patch('calendar_module.delta_sync.get_vector_store') as mock_get_store, \
              patch('calendar_module.delta_sync.barrier', new_callable=AsyncMock):
             
             # Setup mocks
@@ -355,7 +355,7 @@ class TestDeltaSyncTasks:
         with patch('calendar_module.delta_sync.get_tasks_last_updated', return_value="2025-05-29T00:00:00Z"), \
              patch('calendar_module.delta_sync.get_creds', new_callable=AsyncMock), \
              patch('calendar_module.delta_sync.build') as mock_build, \
-             patch('calendar_module.delta_sync.get_calendar_store') as mock_get_store, \
+             patch('calendar_module.delta_sync.get_vector_store') as mock_get_store, \
              patch('calendar_module.delta_sync.safe_delete') as mock_safe_delete, \
              patch('calendar_module.delta_sync.barrier', new_callable=AsyncMock):
             
@@ -385,7 +385,7 @@ class TestDeltaSyncErrorHandling:
         with patch('calendar_module.delta_sync.get_calendar_sync_token', return_value="test_token"), \
              patch('calendar_module.delta_sync.get_creds', new_callable=AsyncMock), \
              patch('calendar_module.delta_sync.build') as mock_build, \
-             patch('calendar_module.delta_sync.get_calendar_store') as mock_get_store, \
+             patch('calendar_module.delta_sync.get_vector_store') as mock_get_store, \
              patch('calendar_module.delta_sync.barrier', new_callable=AsyncMock):
             
             # Setup mocks
@@ -411,7 +411,7 @@ class TestDeltaSyncErrorHandling:
         with patch('calendar_module.delta_sync.get_tasks_last_updated', return_value="2025-05-29T00:00:00Z"), \
              patch('calendar_module.delta_sync.get_creds', new_callable=AsyncMock), \
              patch('calendar_module.delta_sync.build') as mock_build, \
-             patch('calendar_module.delta_sync.get_calendar_store') as mock_get_store, \
+             patch('calendar_module.delta_sync.get_vector_store') as mock_get_store, \
              patch('calendar_module.delta_sync.barrier', new_callable=AsyncMock):
             
             # Setup mocks
@@ -441,7 +441,7 @@ class TestDeltaSyncCalendarErrorHandling:
              patch('calendar_module.delta_sync.set_calendar_sync_token') as mock_set_token, \
              patch('calendar_module.delta_sync.get_creds', new_callable=AsyncMock), \
              patch('calendar_module.delta_sync.build') as mock_build, \
-             patch('calendar_module.delta_sync.get_calendar_store') as mock_get_store, \
+             patch('calendar_module.delta_sync.get_vector_store') as mock_get_store, \
              patch('calendar_module.delta_sync.barrier', new_callable=AsyncMock):
             
             # Create a mock HTTP 410 error response

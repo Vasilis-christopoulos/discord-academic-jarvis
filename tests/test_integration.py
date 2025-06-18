@@ -24,8 +24,12 @@ class TestIntegrationFlow:
             calendar_id="test@example.com",
             tasklist_id="test123",
             data_dir="data/12345",
-            vector_store_path="vector_store/12345",
+            index_rag="rag-test-12345",
+            index_calendar="calendar-test-12345",
             timezone="America/Toronto",
+            s3_image_prefix="images/test/",
+            s3_raw_docs_prefix="raw_docs/test/",
+            s3_bucket="test-bucket",
             channels={67890: channel_config}
         )
         

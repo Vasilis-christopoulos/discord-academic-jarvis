@@ -30,10 +30,12 @@ jobs:
         run: |
           echo "DISCORD_TOKEN=test_discord_token_12345" >> $GITHUB_ENV
           echo "OPENAI_API_KEY=test_openai_key_12345" >> $GITHUB_ENV
+          echo "OPENAI_VISION_MODEL=gpt-4o" >> $GITHUB_ENV
           echo "PINECONE_API_KEY=test_pinecone_key_12345" >> $GITHUB_ENV
-          echo "PINECONE_CALENDAR_INDEX=test-calendar-index" >> $GITHUB_ENV
           echo "SUPABASE_URL=https://test.supabase.co" >> $GITHUB_ENV
           echo "SUPABASE_API_KEY=test_supabase_key_12345" >> $GITHUB_ENV
+          echo "AWS_ACCESS_KEY_ID=test_aws_key_12345" >> $GITHUB_ENV
+          echo "AWS_SECRET_ACCESS_KEY=test_aws_secret_12345" >> $GITHUB_ENV
           echo "TENANTS_FILE=tests/fixtures/tenants_sample.json" >> $GITHUB_ENV
 
       - name: Run tests

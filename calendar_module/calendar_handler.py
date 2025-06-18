@@ -25,7 +25,7 @@ from utils.reranker_calendar import rerank_llm
 from discord import Embed
 from .query_parser import parse_query
 from .sync import ensure_synced
-from .vs_calendar import get_calendar_store
+from utils.vector_store import get_vector_store
 from .delta_sync import delta_sync_calendar, delta_sync_tasks
 from utils.logging_config import logger
 from utils.hybrid_search_utils import hybrid_search_relative_band
@@ -35,7 +35,7 @@ from langchain_openai import OpenAIEmbeddings
 
 # Initialize components for vector search and embeddings
 _embed = OpenAIEmbeddings(model="text-embedding-3-large")  # OpenAI embeddings model
-_store = get_calendar_store()                              # Pinecone vector store
+_store = get_vector_store("calendar-hybrid")                              # Pinecone vector store
 _index = _store._index                                     # Direct Pinecone index access
 _zero_vec = [0.0] * 3072                                  # Zero vector for window-only queries
 

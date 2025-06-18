@@ -16,10 +16,12 @@ def test_app_settings_validation():
         AppSettings(
             discord_token="",  # empty string should fail
             openai_api_key="valid_key",
-            pinecone_api_key="valid_key", 
-            pinecone_calendar_index="valid_index",
+            openai_vision_model="gpt-4o",
+            pinecone_api_key="valid_key",
             supabase_url="valid_url",
-            supabase_api_key="valid_key"
+            supabase_api_key="valid_key",
+            aws_access_key_id="valid_key",
+            aws_secret_access_key="valid_secret"
         )
     assert "Configuration value cannot be empty" in str(exc_info.value)
 
@@ -41,7 +43,11 @@ def test_tenant_config_validation():
         name="test_guild",
         description="test",
         data_dir="data/guild",
-        vector_store_path="vector/guild",
+        index_rag="rag-test-index",
+        index_calendar="calendar-test-index",
+        s3_image_prefix="images/test/",
+        s3_raw_docs_prefix="raw_docs/test/",
+        s3_bucket="test-bucket",
         calendar_id=None,  # Explicitly set optional fields
         tasklist_id=None,
         channels={123: valid_channel}
@@ -84,6 +90,25 @@ def test_environment_variable_loading(env_var, value):
     """Test that environment variables are loaded correctly."""
     from settings import AppSettings
     
-    with patch.dict(os.environ, {env_var: value}):
+    # Create a complete valid settings object with all required fields
+    required_env = {
+        "DISCORD_TOKEN": "test_token",
+        "OPENAI_API_KEY": "test_key", 
+        "OPENAI_VISION_MODEL": "gpt-4o",
+        "PINECONE_API_KEY": "test_key",
+        "SUPABASE_URL": "https://test.supabase.co",
+        "SUPABASE_API_KEY": "test_key",
+        "AWS_ACCESS_KEY_ID": "test_aws_key",
+        "AWS_SECRET_ACCESS_KEY": "test_aws_secret",
+        "TENANTS_FILE": "tests/fixtures/tenants_sample.json"
+    }
+    # Override the specific variable being tested
+    required_env[env_var] = value
+    
+    with patch.dict(os.environ, required_env, clear=True):
         settings = AppSettings()
-        assert getattr(settings, env_var.lower()) == value
+        field_name = env_var.lower()
+        if field_name == "openai_vision_model":
+            assert getattr(settings, field_name) == required_env["OPENAI_VISION_MODEL"]
+        else:
+            assert getattr(settings, field_name) == value

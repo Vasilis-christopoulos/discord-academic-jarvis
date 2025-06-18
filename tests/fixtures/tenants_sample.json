@@ -5,7 +5,12 @@
       "calendar_id": "cal@ex.com",
       "tasklist_id": "test_tasklist_id",
       "data_dir": "data/111",
-      "vector_store_path": "vector_store/111",
+      "index_rag": "rag-111-test",
+      "index_calendar": "calendar-111-test",
+      "timezone": "America/Toronto",
+      "s3_image_prefix": "images/test/",
+      "s3_raw_docs_prefix": "raw_docs/test/",
+      "s3_bucket": "test-bucket",
       "channels": {
         "222": {
           "name": "test-channel1",

@@ -62,9 +62,12 @@ def load_tenant_context(guild_id: int, channel_id: int) -> Optional[Dict]:
                 # Merge channel config into tenant config (channel config takes precedence)
                 cfg.update(chan_cfg.model_dump())
 
-            # Ensure required directories exist for data storage and vector databases
+            # Ensure required directories exist for data storage
             Path(cfg["data_dir"]).mkdir(parents=True, exist_ok=True)
-            Path(cfg["vector_store_path"]).mkdir(parents=True, exist_ok=True)
+            
+            # Only create vector_store_path if it exists (from channel config)
+            if "vector_store_path" in cfg:
+                Path(cfg["vector_store_path"]).mkdir(parents=True, exist_ok=True)
 
             logger.debug("ctx-load guild=%s chan=%s cfg=%s", guild_id, channel_id, cfg["name"])
 

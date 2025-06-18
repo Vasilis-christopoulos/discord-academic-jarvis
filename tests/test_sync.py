@@ -438,7 +438,7 @@ class TestEnsureSynced:
              patch('calendar_module.sync.set_first_last') as mock_set_first_last, \
              patch('calendar_module.sync.parse_iso') as mock_parse_iso, \
              patch('calendar_module.sync.fetch_google', new_callable=AsyncMock) as mock_fetch, \
-             patch('calendar_module.sync.get_calendar_store') as mock_get_store:
+             patch('calendar_module.sync.get_vector_store') as mock_get_store:
             
             # Setup mocks
             mock_get_first_last.return_value = (None, None)  # First sync
@@ -482,7 +482,7 @@ class TestEnsureSynced:
              patch('calendar_module.sync.set_first_last') as mock_set_first_last, \
              patch('calendar_module.sync.parse_iso') as mock_parse_iso, \
              patch('calendar_module.sync.fetch_google', new_callable=AsyncMock) as mock_fetch, \
-             patch('calendar_module.sync.get_calendar_store') as mock_get_store:
+             patch('calendar_module.sync.get_vector_store') as mock_get_store:
             
             # Setup mocks
             mock_get_first_last.return_value = (existing_first, existing_last)
@@ -524,7 +524,7 @@ class TestEnsureSynced:
              patch('calendar_module.sync.set_first_last') as mock_set_first_last, \
              patch('calendar_module.sync.parse_iso') as mock_parse_iso, \
              patch('calendar_module.sync.fetch_google', new_callable=AsyncMock) as mock_fetch, \
-             patch('calendar_module.sync.get_calendar_store') as mock_get_store:
+             patch('calendar_module.sync.get_vector_store') as mock_get_store:
             
             # Setup mocks
             mock_get_first_last.return_value = (existing_first, existing_last)
@@ -560,7 +560,7 @@ class TestEnsureSynced:
         with patch('calendar_module.sync.get_first_last') as mock_get_first_last, \
              patch('calendar_module.sync.parse_iso') as mock_parse_iso, \
              patch('calendar_module.sync.fetch_google', new_callable=AsyncMock) as mock_fetch, \
-             patch('calendar_module.sync.get_calendar_store') as mock_get_store:
+             patch('calendar_module.sync.get_vector_store') as mock_get_store:
             
             # Setup mocks
             mock_get_first_last.return_value = (None, None)  # First sync
@@ -593,7 +593,7 @@ class TestEnsureSynced:
              patch('calendar_module.sync.set_first_last') as mock_set_first_last, \
              patch('calendar_module.sync.parse_iso') as mock_parse_iso, \
              patch('calendar_module.sync.fetch_google', new_callable=AsyncMock) as mock_fetch, \
-             patch('calendar_module.sync.get_calendar_store') as mock_get_store:
+             patch('calendar_module.sync.get_vector_store') as mock_get_store:
             
             # Setup mocks
             mock_get_first_last.return_value = (None, None)  # First sync for both

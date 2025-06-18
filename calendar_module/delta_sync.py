@@ -14,7 +14,7 @@ from .sync_store import (
     get_calendar_sync_token, set_calendar_sync_token,
     get_tasks_last_updated,   set_tasks_last_updated
 )
-from .vs_calendar import get_calendar_store
+from utils.vector_store import get_vector_store
 from .sync        import get_creds
 from utils.calendar_utils import epoch_from_iso
 from utils.logging_config import logger
@@ -132,7 +132,7 @@ async def delta_sync_calendar(context: dict):
         if not page_token:
             break
 
-    store = get_calendar_store()
+    store = get_vector_store(context.get("index_calendar"))
     if to_upsert:
         logger.debug("delta_sync_calendar: upsert %d", len(to_upsert))
         try:
@@ -253,7 +253,7 @@ async def delta_sync_tasks(context: dict):
         if not page_token:
             break
 
-    store = get_calendar_store()
+    store = get_vector_store(context.get("index_calendar"))
     if to_upsert:
         logger.debug("delta_sync_tasks: upsert %d", len(to_upsert))
         try:

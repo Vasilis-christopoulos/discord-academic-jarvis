@@ -11,4 +11,4 @@ logs/
 calendar_module/credentials.json
 calendar_module/token.json
 calendar_module/quickstart.py
-
+tenants.json

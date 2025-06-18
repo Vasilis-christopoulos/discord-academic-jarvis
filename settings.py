@@ -1,4 +1,3 @@
-# settings.py
 """
 Centralized Application and Tenant-Channel Configuration
 
@@ -66,8 +65,12 @@ class TenantConfig(BaseModel):
     calendar_id: Optional[str]             # Google Calendar ID for this tenant
     tasklist_id: Optional[str]             # Google Tasks list ID for this tenant
     data_dir: str                         # Base directory for tenant data
-    vector_store_path: str                # Base directory for tenant vector stores
-    timezone: str = "America/Toronto"     # Default timezone for date/time operations
+    index_rag: str                # Index name for RAG vector store
+    index_calendar: str         # Index name for calendar vector store
+    timezone: str = "America/Toronto"    # Default timezone for date/time operations
+    s3_image_prefix: str                 # S3 prefixes for storing images
+    s3_raw_docs_prefix: str          # S3 prefixes for storing raw documents
+    s3_bucket: str             # S3 bucket name for storing tenant data
     channels: Dict[int, ChannelConfig]    # Channel ID -> Channel configuration mapping
 
     model_config = {
@@ -82,23 +85,27 @@ class AppSettings(BaseSettings):
     All sensitive data (API keys, credentials) should be stored in environment
     variables or .env file, never hardcoded. This class validates that all
     required settings are present and non-empty.
-    """
-    # Discord Bot Configuration
-    discord_token: str = Field(..., env="DISCORD_TOKEN")
+    """    # Discord Bot Configuration
+    discord_token: str = Field(description="Discord bot token")
     
-    # OpenAI API Configuration
-    openai_api_key: str = Field(..., env="OPENAI_API_KEY")
+    # OpenAI API Configuration  
+    openai_api_key: str = Field(description="OpenAI API key")
+    openai_vision_model: str = Field(description="OpenAI vision model to use")
     
     # Pinecone Vector Database Configuration
-    pinecone_api_key: str = Field(..., env="PINECONE_API_KEY")
-    pinecone_calendar_index: str = Field(..., env="PINECONE_CALENDAR_INDEX")
+    pinecone_api_key: str = Field(description="Pinecone API key")
     
     # Supabase Database Configuration
-    supabase_url: str = Field(..., env="SUPABASE_URL")
-    supabase_api_key: str = Field(..., env="SUPABASE_API_KEY")
+    supabase_url: str = Field(description="Supabase project URL")
+    supabase_api_key: str = Field(description="Supabase API key")
+    
+    # AWS S3 Configuration
+    aws_access_key_id: str = Field(description="AWS access key ID")
+    aws_secret_access_key: str = Field(description="AWS secret access key")
+    aws_region_name: str = Field(default="ca-central-1", description="AWS region name")
     
     # Configuration File Paths
-    tenants_file: str = Field("tenants.json", env="TENANTS_FILE")
+    tenants_file: str = Field(default="tenants.json", description="Path to tenants configuration file")
 
     model_config = SettingsConfigDict(
         env_file = ".env",           # Load from .env file if present
@@ -109,18 +116,21 @@ class AppSettings(BaseSettings):
     
     @field_validator(
         "discord_token",
-        "openai_api_key", 
+        "openai_api_key",
+        "openai_vision_model", 
         "pinecone_api_key",
-        "pinecone_calendar_index",
         "supabase_url",
         "supabase_api_key",
+        "aws_access_key_id",
+        "aws_secret_access_key",
+        "aws_region_name",
+        "tenants_file"
     )
     def not_empty(cls, v: str) -> str:
         """Validate that critical configuration values are not empty."""
         if not v.strip():
             raise ValueError("Configuration value cannot be empty")
         return v
-
 
 # Initialize and validate application settings
 # This will raise an exception if any required environment variables are missing
@@ -144,4 +154,4 @@ for guild_str, cfg in raw.items():
         raise RuntimeError(f"Invalid tenant configuration for guild {guild_str}: {e}")
 
 # Log successful configuration loading
-logger.info("loaded settings; tenants=%d calendar_index=%s", len(TENANT_CONFIGS), settings.pinecone_calendar_index)
+logger.info("loaded settings; tenants=%d index=%s", len(TENANT_CONFIGS), TENANT_CONFIGS[0].index_calendar)

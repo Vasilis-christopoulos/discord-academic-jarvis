@@ -14,7 +14,7 @@ from google.auth.exceptions import RefreshError
 from langchain_core.documents import Document
 
 from .sync_store import get_first_last, set_first_last
-from .vs_calendar import get_calendar_store
+from utils.vector_store import get_vector_store
 from utils.calendar_utils import epoch_from_iso, parse_iso
 from utils.logging_config import logger
 
@@ -240,7 +240,7 @@ async def ensure_synced(
         if not slices:
             continue                            # nothing to fetch
 
-        store = get_calendar_store()
+        store = get_vector_store(context.get("index_calendar"))
 
         for s, e in slices:
             docs = await fetch_google(
