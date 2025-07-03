@@ -9,26 +9,33 @@ class TestRAGHandler:
     
     async def test_rag_respond_basic(self):
         """Test basic RAG response functionality."""
-        from rag_module.rag_handler import respond as rag_respond
+        from rag_module.rag_handler_optimized import respond as rag_respond
         
-        # Mock the ingest_pipeline to avoid S3 calls
-        with patch('rag_module.rag_handler.ingest_pipeline', new_callable=AsyncMock) as mock_ingest:
+        # Mock the ingest_pipeline to avoid S3 calls - optimized handler has different structure
+        with patch('rag_module.ingest_pipeline.ingest_pipeline', new_callable=AsyncMock) as mock_ingest:
             mock_ingest.return_value = None  # No documents to ingest
             
             context = {
+                "tenant_id": "test_tenant",
+                "guild_id": "123456789",
+                "channel_id": "987654321",
                 "name": "test-channel", 
                 "type": "rag",
+                "timezone": "UTC",
+                "index_rag": "calendar-hybrid",  # Required for validation
                 "s3_bucket": "test-bucket",
                 "s3_raw_docs_prefix": "raw_docs/test/",
                 "s3_image_prefix": "images/test/"
             }
             query = "What is machine learning?"
             
-            result = await rag_respond(query, context)
+            result = await rag_respond(query, context, user_id="test_user")
             
-            # The current implementation returns "Success"
+            # The optimized implementation returns a formatted response string
             assert isinstance(result, str)
-            assert result == "Success"
+            assert len(result) > 0
+            # Should contain helpful response when no documents found
+            assert "information" in result.lower() or "materials" in result.lower()
 
 class TestCalendarHandler:
     """Test Calendar module handler - integration test."""

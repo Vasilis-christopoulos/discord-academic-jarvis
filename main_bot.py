@@ -4,7 +4,7 @@ from discord import app_commands
 from discord.ext import commands
 from tenant_context import load_tenant_context
 from settings import settings
-from rag_module.rag_handler import respond as rag_respond
+from rag_module.rag_handler_optimized import respond as rag_respond
 from calendar_module.calendar_handler import respond as cal_respond
 
 logging.basicConfig(level=logging.INFO)

@@ -1,14 +1,94 @@
+# Environment and secrets
 .env
+*.env
+.env.local
+.env.production
+.env.staging
+
+# Python
 __pycache__/
-*.pyc
-*.db
-*.log
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# Virtual environments
 venv/
+env/
+ENV/
+.venv/
+
+# IDEs and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Application specific
 data/
 vector_store/
 cache/
 logs/
+*.log
+*.db
+*.sqlite
+*.sqlite3
+
+# Credentials and sensitive files
 calendar_module/credentials.json
 calendar_module/token.json
 calendar_module/quickstart.py
 tenants.json
+
+# macOS system files
+.DS_Store
+*/.DS_Store
+.AppleDouble
+.LSOverride
+
+# Temporary files
+*.tmp
+*.temp
+response.json
+
+# AWS and deployment
+.aws/
+*.pem
+*.key
+
+# Docker
+.dockerignore

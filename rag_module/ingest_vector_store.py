@@ -40,3 +40,5 @@ def get_vector_store(index_name: str) -> PineconeVectorStore:
 
     # text_key is mandatory with langchain-pinecone ≥0.1.0
     return PineconeVectorStore(index=index, embedding=embed, text_key="text")
+
+
