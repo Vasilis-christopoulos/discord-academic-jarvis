@@ -11,19 +11,12 @@ This bot follows a modular, multi-tenant architecture designed for academic Disc
 - **RAG Module** (`rag_module/`) - Document-based Q&A using vector databases
 - **Calendar Module** (`calendar_module/`) - Google Calendar/Tasks integration with NLP query parsing
 
-### Key Components
-- **Multi-tenant Configuration** (`tenants.json`, `settings.py`) - Support multiple Discord servers with different configurations
-- **Channel-aware Routing** (`message_router.py`) - Per-channel module access control
-- **Natural Language Processing** (`calendar_module/query_parser.py`) - LLM-powered query parsing
-- **Vector Search** (`utils/hybrid_search_utils.py`) - Semantic search capabilities
-- **Comprehensive Logging** (`utils/logging_config.py`) - Structured logging with rotation
-
 ### Tech Stack
 - **Discord.py** - Discord bot framework
 - **OpenAI API** - Language models for NLP and conversation
 - **Pinecone** - Vector database for semantic search
 - **Google Calendar/Tasks APIs** - Calendar data integration 
-- **Supabase** - Synchronization handling 
+- **Supabase** - Synchronization handling, rate limiting and user stats
 - **Pydantic** - Configuration validation and data modeling
 - **LangChain** - LLM orchestration and structured outputs
 
