@@ -1,0 +1,12 @@
+# ignore Python virtual env
+venv
+# ignore Git metadata
+.git
+# ignore test outputs, editor configs, logs
+__pycache__
+*.pyc
+*.log
+.idea
+.vscode
+# ignore any node_modules, etc.
+node_modules

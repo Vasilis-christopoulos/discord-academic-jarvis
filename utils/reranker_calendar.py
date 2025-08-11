@@ -6,7 +6,7 @@ from langchain_core.documents import Document
 from utils.calendar_utils import html_to_discord_md
 from utils.logging_config import logger
 
-_llm = ChatOpenAI(model="gpt-4.1-nano", temperature=0)
+_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
 _HTML_TAG_RX = re.compile(r"<[^>]+>")   # crude tag stripper
 
@@ -37,8 +37,15 @@ def rerank_llm(query: str, docs: List[Document]) -> List[Document]:
         typ = d.metadata.get("type", "?")
         if typ == "event":
             start = d.metadata.get("start_dt", "")[:16].replace("T", " ")
-            lines.append(
-                f"[{i}] 🗓 EVENT | {title} | {desc} (Starts: {start})")
+            # Include location for better context
+            location = d.metadata.get("location", "")
+            if location:
+                location_clean = _clean(location, 20)
+                lines.append(
+                    f"[{i}] 🗓 EVENT | {title} | {desc} | Location: {location_clean} (Starts: {start})")
+            else:
+                lines.append(
+                    f"[{i}] 🗓 EVENT | {title} | {desc} (Starts: {start})")
         else:
             due = d.metadata.get("start_dt", "")[:10]
             lines.append(
@@ -48,7 +55,7 @@ def rerank_llm(query: str, docs: List[Document]) -> List[Document]:
 
     prompt = f"""
     System:
-    You are an assistant that ranks calendar items.
+    You are an assistant that ranks calendar items based on relevance to user questions.
 
     User:
     QUESTION: "{query}"
@@ -57,26 +64,38 @@ def rerank_llm(query: str, docs: List[Document]) -> List[Document]:
     {block}
 
     # INSTRUCTIONS
-    1. For each candidate, assign a RELEVANCE score **from 0 to 1** 
-        based on how well it answers the question, not just containing keywords.
-        - 1 means highly relevant, 0 means not relevant at all.
+    1. For each candidate, assign a RELEVANCE score from 0 to 1:
+        - 1.0 = Perfectly matches the question
+        - 0.7-0.9 = Highly relevant 
+        - 0.4-0.6 = Moderately relevant
+        - 0.1-0.3 = Weakly relevant
+        - 0.0 = Not relevant at all
 
-    2. DISCARD every candidate with score < **0.5**. 
-    3. If no candidate scores ≥ 0.5, reply with an empty list [].
+    2. ONLY include candidates with score ≥ 0.4 in your output.
+    3. If NO candidate scores ≥ 0.4, return an empty list [].
+    4. Be strict - only return truly relevant items for the specific question.
+
+    ## RELEVANCE GUIDELINES FOR SPORTS QUERIES
+    - If question asks about "sport" or "sports": ONLY return events that are clearly sports-related
+    - Sports keywords: soccer, football, basketball, tennis, hockey, game, match, tournament
+    - Sports locations: stadium, field, court, arena, gym (NOT offices, conference rooms)
+    - Business events at sports venues are NOT sports activities
 
     ## RANKING RULES
-    - If the question contains “event”, "summit", "conference", "seminar", etc. events outrank tasks.
-    - If the question contains “task”, “to-do”, "deadline", etc. tasks outrank events.
+    - If the question contains "event", "summit", "conference", "seminar", etc. events outrank tasks.
+    - If the question contains "task", "to-do", "deadline", etc. tasks outrank events.
 
     ## OUTPUT FORMAT
-    Reply with a JSON array of indices of the candidates in order of relevance.
-    Example valid reply:  [1, 0]
+    Return ONLY a JSON array of indices, ordered by relevance.
+    Examples: [0, 2, 1] or [1] or []
 
-    Do NOT output anything else.
+    Do NOT include explanations or other text.
     """.strip()
 
     try:
         reply = _llm.invoke(prompt).content
+        if not isinstance(reply, str):
+            return docs
         ids = json.loads(reply)
         assert isinstance(ids, list)
     except Exception:

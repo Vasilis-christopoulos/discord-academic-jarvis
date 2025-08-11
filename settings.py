@@ -1,4 +1,3 @@
-# settings.py
 """
 Centralized Application and Tenant-Channel Configuration
 
@@ -31,25 +30,37 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, AliasChoices
 
 from utils.logging_config import logger
 
-class ChannelConfig(BaseModel):
+class CategoryPermissionConfig(BaseModel):
     """
-    Configuration model for individual Discord channels.
+    Configuration model for Discord channel categories and their feature permissions.
+    """
+    name: str                           # Human-readable category name
+    features: List[str]                # List of available features: 'rag', 'calendar', etc.
+    default_data_dir: str              # Default data directory for channels in this category
+    default_vector_store_path: str     # Default vector store path for channels in this category
     
-    Each channel can have its own data directories and module access controls.
-    The 'type' field determines which bot modules are available in this channel.
-    """
-    name: str                # Human-readable channel name
-    description: str         # Channel description for documentation
-    data_dir: str           # Directory for channel-specific data storage
-    vector_store_path: str  # Directory for channel-specific vector database
-    type: str              # Module access control: 'rag', 'calendar', 'rag-calendar', etc.
-
     model_config = {
-        "extra": "forbid"  # Reject unknown fields to catch configuration errors
+        "extra": "forbid"
+    }
+
+
+class ChannelOverrideConfig(BaseModel):
+    """
+    Configuration model for individual channel overrides.
+    Used when a specific channel needs different settings than its category default.
+    """
+    name: Optional[str] = None         # Human-readable channel name
+    description: Optional[str] = None  # Channel description
+    features: Optional[List[str]] = None  # Override features (if different from category)
+    data_dir: Optional[str] = None     # Override data directory
+    vector_store_path: Optional[str] = None  # Override vector store path
+    
+    model_config = {
+        "extra": "forbid"
     }
 
 
@@ -58,17 +69,32 @@ class TenantConfig(BaseModel):
     Configuration model for Discord guilds (servers) and their channels.
     
     Represents a tenant in the multi-tenant architecture. Each guild can have
-    multiple channels with different configurations and access controls.
+    category-based permissions with optional channel-specific overrides.
     """
     guild_id: int                           # Discord guild (server) ID
     name: str                              # Human-readable tenant name
     description: str                       # Tenant description
+    admin_role_id: Optional[int] = None     # Discord role ID for admin access to file uploads
     calendar_id: Optional[str]             # Google Calendar ID for this tenant
     tasklist_id: Optional[str]             # Google Tasks list ID for this tenant
     data_dir: str                         # Base directory for tenant data
-    vector_store_path: str                # Base directory for tenant vector stores
-    timezone: str = "America/Toronto"     # Default timezone for date/time operations
-    channels: Dict[int, ChannelConfig]    # Channel ID -> Channel configuration mapping
+    index_rag: str                # Index name for RAG vector store
+    index_calendar: str         # Index name for calendar vector store
+    timezone: str = "America/Toronto"    # Default timezone for date/time operations
+    s3_image_prefix: str                 # S3 prefixes for storing images
+    s3_raw_docs_prefix: str          # S3 prefixes for storing raw documents
+    s3_bucket: str             # S3 bucket name for storing tenant data
+    
+    # Category-based permissions (replaces the old channels dict)
+    category_permissions: Dict[int, CategoryPermissionConfig] = {}
+    
+    # Fallback settings for channels not in configured categories
+    default_features: List[str] = []
+    default_data_dir_template: str = "data/{guild_id}/{channel_id}"
+    default_vector_store_template: str = "rag_module/vector_store/{guild_id}/{channel_id}"
+    
+    # Manual overrides for specific channels
+    channel_overrides: Dict[int, ChannelOverrideConfig] = {}
 
     model_config = {
         "extra": "forbid"  # Reject unknown fields to catch configuration errors
@@ -84,43 +110,55 @@ class AppSettings(BaseSettings):
     required settings are present and non-empty.
     """
     # Discord Bot Configuration
-    discord_token: str = Field(..., env="DISCORD_TOKEN")
+    discord_token: str = Field(default="", description="Discord bot token")
     
-    # OpenAI API Configuration
-    openai_api_key: str = Field(..., env="OPENAI_API_KEY")
+    # OpenAI API Configuration  
+    openai_api_key: str = Field(default="", description="OpenAI API key")
+    openai_vision_model: str = Field(default="gpt-4o", description="OpenAI vision model to use")
     
     # Pinecone Vector Database Configuration
-    pinecone_api_key: str = Field(..., env="PINECONE_API_KEY")
-    pinecone_calendar_index: str = Field(..., env="PINECONE_CALENDAR_INDEX")
+    pinecone_api_key: str = Field(default="", description="Pinecone API key")
     
     # Supabase Database Configuration
-    supabase_url: str = Field(..., env="SUPABASE_URL")
-    supabase_api_key: str = Field(..., env="SUPABASE_API_KEY")
+    supabase_url: str = Field(default="", description="Supabase project URL")
+    supabase_api_key: str = Field(default="", description="Supabase API key")
+    
+    # AWS S3 Configuration
+    aws_access_key_id: str = Field(default="", description="AWS access key ID")
+    aws_secret_access_key: str = Field(default="", description="AWS secret access key")
+    aws_region_name: str = Field(
+        default="ca-central-1", 
+        description="AWS region name",
+        validation_alias=AliasChoices('aws_region_name', 'AWS_REGION_NAME', 'AWS_REGION')
+    )
     
     # Configuration File Paths
-    tenants_file: str = Field("tenants.json", env="TENANTS_FILE")
+    tenants_file: str = Field(default="tenants.json", description="Path to tenants configuration file")
 
     model_config = SettingsConfigDict(
-        env_file = ".env",           # Load from .env file if present
-        env_file_encoding = "utf-8", # Handle unicode in environment files
-        case_sensitive = False,      # Allow case-insensitive env var names
-        extra = "ignore"            # Ignore unknown environment variables
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore"
     )
     
     @field_validator(
         "discord_token",
-        "openai_api_key", 
+        "openai_api_key",
+        "openai_vision_model", 
         "pinecone_api_key",
-        "pinecone_calendar_index",
         "supabase_url",
         "supabase_api_key",
+        "aws_access_key_id",
+        "aws_secret_access_key",
+        "aws_region_name",
+        "tenants_file"
     )
     def not_empty(cls, v: str) -> str:
         """Validate that critical configuration values are not empty."""
         if not v.strip():
             raise ValueError("Configuration value cannot be empty")
         return v
-
 
 # Initialize and validate application settings
 # This will raise an exception if any required environment variables are missing
@@ -144,4 +182,7 @@ for guild_str, cfg in raw.items():
         raise RuntimeError(f"Invalid tenant configuration for guild {guild_str}: {e}")
 
 # Log successful configuration loading
-logger.info("loaded settings; tenants=%d calendar_index=%s", len(TENANT_CONFIGS), settings.pinecone_calendar_index)
+if TENANT_CONFIGS:
+    logger.info("loaded settings; tenants=%d index=%s", len(TENANT_CONFIGS), TENANT_CONFIGS[0].index_calendar)
+else:
+    logger.warning("No tenant configurations loaded")

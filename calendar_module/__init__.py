@@ -8,7 +8,7 @@ try:
     from . import query_parser
     from . import sync
     from . import sync_store
-    from . import vs_calendar
+    from ..utils import vector_store
 except ImportError as e:
     # In case of import errors during testing, still make the package importable
     import logging
