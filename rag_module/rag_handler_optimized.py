@@ -37,6 +37,8 @@ from .rag_resilience import (
 )
 from .rag_cache import get_cache_manager, RAGCacheManager
 from .simple_connection_manager import get_connection_manager
+from .rate_limiter import get_rate_limiter, RateLimitConfig, DailyRateLimiter
+from .database_utils import get_supabase_client
 from langchain_openai import ChatOpenAI
 from utils.logging_config import logger
 from settings import settings
@@ -50,12 +52,18 @@ class OptimizedRAGHandler:
         self.cache_manager = get_cache_manager(cache_config)
         self.connection_manager = get_connection_manager()
         
+        # Initialize rate limiter
+        self.rate_limiter = get_rate_limiter(
+            get_supabase_client(),
+            RateLimitConfig()
+        )
+        
         # Initialize OpenAI client
         self.llm = ChatOpenAI(
             model="gpt-4o-mini",
             temperature=0.1,
-            api_key=settings.openai_api_key,
-            request_timeout=30.0,
+            api_key=settings.openai_api_key,  # type: ignore
+            timeout=30.0,  # Fixed parameter name
             max_retries=2  # Enable some retries for connection issues
         )
         
@@ -133,6 +141,27 @@ Answer:"""
                 logger.warning("Input validation failed [%s]: %s", correlation_id, str(e))
                 return self._generate_validation_error_response(str(e))
             
+            # Step 1.5: Check rate limits
+            if user_id:
+                rate_result = await self.rate_limiter.check_user_limit(user_id, "rag_requests")
+                
+                if not rate_result.allowed:
+                    logger.warning("Rate limit exceeded for user %s [%s]: %s", 
+                                 user_id, correlation_id, rate_result.message)
+                    return self._generate_rate_limit_response(rate_result)
+                
+                # Log warning if approaching limit
+                if rate_result.warning_threshold:
+                    logger.warning("User %s approaching rate limit [%s]: %d/%d requests", 
+                                 user_id, correlation_id, rate_result.current_count, rate_result.daily_limit)
+                
+                # Check for wisdom warning (70% threshold)
+                wisdom_warning_needed = rate_result.wisdom_warning
+                
+            else:
+                logger.warning("No user_id provided for rate limiting [%s]", correlation_id)
+                wisdom_warning_needed = False
+            
             # Step 2: Check response cache first
             context_signature = f"{validated_context['index_rag']}_v1"
             cached_response = self.cache_manager.get_response(
@@ -180,8 +209,24 @@ Answer:"""
             response_time = time.time() - start_time
             self._update_performance_stats(response_time)
             
+            # Increment user rate limit counter on successful completion
+            if user_id:
+                try:
+                    new_count = await self.rate_limiter.increment_user_count(user_id, "rag_requests")
+                    logger.debug("Incremented RAG requests for user %s [%s]: %d", 
+                               user_id, correlation_id, new_count)
+                except Exception as e:
+                    logger.error("Failed to increment rate limit for user %s [%s]: %s", 
+                               user_id, correlation_id, str(e))
+            
             logger.info("Successfully generated optimized RAG response [%s]: %d chars in %.2fs (user: %s)", 
                        correlation_id, len(response), response_time, user_id or "unknown")
+            
+            # Add wisdom warning if needed
+            if wisdom_warning_needed:
+                remaining = rate_result.daily_limit - rate_result.current_count
+                wisdom_message = f"\n\n🧠 **Wisdom Warning**: You have completed {rate_result.current_count}/{rate_result.daily_limit} requests. Spend the next {remaining} wisely."
+                response = response + wisdom_message
             
             return response
             
@@ -245,10 +290,21 @@ Answer:"""
     async def _retrieve_documents_with_timeout(self, query: str, context: Dict[str, Any]) -> List[Document]:
         """Retrieve documents with timeout protection."""
         try:
-            return await asyncio.wait_for(
-                perform_semantic_search(query, context),
-                timeout=10.0
+            # Create a coroutine for the semantic search
+            search_coro = asyncio.create_task(
+                asyncio.to_thread(perform_semantic_search, query, context)
             )
+            results = await asyncio.wait_for(search_coro, timeout=10.0)
+            
+            # Handle both possible return types from perform_semantic_search
+            if not results:
+                return []
+            
+            # If the first item is a tuple (Document, score), extract just the documents
+            if isinstance(results[0], tuple):
+                return [doc for doc, score in results]  # type: ignore
+            else:
+                return results  # type: ignore
         except asyncio.TimeoutError:
             logger.warning("Document retrieval timed out for query: %s", query[:50])
             return []
@@ -343,6 +399,10 @@ Answer:"""
             "Please try again in a moment. If the problem persists, please contact support. "
             f"Your question was: '{query[:100]}...'"
         )
+    
+    def _generate_rate_limit_response(self, rate_result) -> str:
+        """Generate user-friendly rate limit response."""
+        return rate_result.message
     
     def _generate_no_context_response(self, query: str) -> str:
         """Generate response when no relevant documents are found."""

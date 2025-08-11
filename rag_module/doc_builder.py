@@ -28,39 +28,8 @@ from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from rag_module.ingest_vector_store import get_vector_store
+from rag_module.pdfingestor import IngestedDoc, PageContent, ChunkWithCitation, AssetInfo
 from utils.logging_config import logger
-
-# Try to import the new data structures
-try:
-    from .pdfingestor import IngestedDoc, PageContent, ChunkWithCitation
-except ImportError:
-    # Fallback for backward compatibility
-    from dataclasses import dataclass, field
-    @dataclass
-    class PageContent:
-        page_number: int
-        markdown_content: str
-        assets: List = field(default_factory=list)
-        metadata: Dict = field(default_factory=dict)
-    
-    @dataclass
-    class ChunkWithCitation:
-        content: str
-        metadata: Dict[str, Any]
-        citation_anchor: str
-        page_number: int
-        chunk_index: int
-        document_name: str
-        
-    @dataclass
-    class IngestedDoc:
-        s3_key: str
-        text: str = ""
-        images: List[bytes] = field(default_factory=list)
-        markdown_content: str = ""
-        assets: List = field(default_factory=list)
-        metadata: Dict = field(default_factory=dict)
-        pages_content: Optional[List[PageContent]] = None
 
 
 class DocBuilder:
@@ -122,6 +91,11 @@ class DocBuilder:
         
         Returns the number of chunks created.
         """
+        # Safety check - should not reach here if pages_content is None due to caller check
+        if not pdoc.pages_content:
+            logger.warning("_build_with_page_based_citations called with no pages_content, falling back to document level")
+            return self._build_document_level(pdoc, asset_captions)
+            
         all_docs = []
         document_name = self._get_document_name(pdoc)
         

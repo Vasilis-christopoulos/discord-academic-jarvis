@@ -25,16 +25,17 @@ def load_tenant_context(guild_id: int, channel_id: int) -> Optional[Dict]:
 
     This function:
     1. Finds the tenant configuration for the given guild_id
-    2. Applies any channel-specific configuration overrides
-    3. Ensures required directories exist (data_dir, vector_store_path)
-    4. Returns the merged configuration dictionary
+    2. Checks if the channel is specifically configured (security requirement)
+    3. Applies any channel-specific configuration overrides
+    4. Ensures required directories exist (data_dir, vector_store_path)
+    5. Returns the merged configuration dictionary
 
     Args:
         guild_id: Discord guild (server) ID
         channel_id: Discord channel ID within the guild
 
     Returns:
-        Dict containing merged tenant+channel configuration, or None if guild not configured
+        Dict containing merged tenant+channel configuration, or None if guild/channel not configured
 
     Configuration Structure:
         {
@@ -53,14 +54,18 @@ def load_tenant_context(guild_id: int, channel_id: int) -> Optional[Dict]:
     # Search through all configured tenants for matching guild
     for tenant in TENANT_CONFIGS:
         if tenant.guild_id == guild_id:
+            # Check if this specific channel is configured
+            chan_cfg = tenant.channels.get(channel_id)
+            if not chan_cfg:
+                logger.warning("Channel %s not configured in guild %s. Available channels: %s", 
+                             channel_id, guild_id, list(tenant.channels.keys()))
+                return None
+
             # Start with the base tenant configuration
             cfg = tenant.model_dump()
 
-            # Apply channel-specific overrides if this channel is configured
-            chan_cfg = tenant.channels.get(channel_id)
-            if chan_cfg:
-                # Merge channel config into tenant config (channel config takes precedence)
-                cfg.update(chan_cfg.model_dump())
+            # Merge channel config into tenant config (channel config takes precedence)
+            cfg.update(chan_cfg.model_dump())
 
             # Ensure required directories exist for data storage
             Path(cfg["data_dir"]).mkdir(parents=True, exist_ok=True)

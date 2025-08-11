@@ -89,21 +89,41 @@ async def delta_sync_calendar(context: dict):
     to_upsert, to_delete = [], []
     page_token = None
     next_sync_token = None
+    
+    # Track if we're doing a full sync (no token) to prevent infinite loops
+    is_full_sync = not token
+    
     while True:
         try:
-            resp = svc.events().list(
-            calendarId   = context["calendar_id"],
-            syncToken    = token,
-            showDeleted  = True,
-            pageToken    = page_token,
-            ).execute()
+            # Prepare request parameters
+            request_params = {
+                "calendarId": context["calendar_id"],
+                "showDeleted": True,
+                "pageToken": page_token,
+            }
+            
+            # Only add syncToken if we have one (for incremental sync)
+            if token:
+                request_params["syncToken"] = token
+            
+            resp = svc.events().list(**request_params).execute()
+            
         except HttpError as err:
             # handle sync token expiration (HTTP 410)
             if err.resp.status == 410:
-                logger.warning("Sync token expired, resetting token.")
-                # reset the token and try a full sync
-                set_calendar_sync_token("")
-                return await delta_sync_calendar(context)
+                if is_full_sync:
+                    # If we're already doing a full sync and getting 410, something is wrong
+                    logger.error("Full sync failed with 410 error. Calendar API issue.")
+                    raise
+                    
+                logger.warning("Sync token expired, switching to full sync.")
+                # Clear the token and switch to full sync mode
+                set_calendar_sync_token(None)
+                token = None
+                is_full_sync = True
+                page_token = None  # Reset pagination for full sync
+                continue  # Retry the request without syncToken
+                
             raise  # re-raise other errors
 
         for ev in resp.get("items", []):
@@ -132,7 +152,7 @@ async def delta_sync_calendar(context: dict):
         if not page_token:
             break
 
-    store = get_vector_store(context.get("index_calendar"))
+    store = get_vector_store(context.get("index_calendar", "calendar-hybrid"))
     if to_upsert:
         logger.debug("delta_sync_calendar: upsert %d", len(to_upsert))
         try:
@@ -253,7 +273,7 @@ async def delta_sync_tasks(context: dict):
         if not page_token:
             break
 
-    store = get_vector_store(context.get("index_calendar"))
+    store = get_vector_store(context.get("index_calendar", "calendar-hybrid"))
     if to_upsert:
         logger.debug("delta_sync_tasks: upsert %d", len(to_upsert))
         try:

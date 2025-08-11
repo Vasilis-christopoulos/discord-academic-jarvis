@@ -249,7 +249,7 @@ def perform_semantic_search(
     query: str,
     context: Dict[str, Any],
     k: int = 5,
-    score_threshold: Optional[float] = 0.7,
+    score_threshold: Optional[float] = None,
     include_scores: bool = False,
     enable_reranking: bool = True
 ) -> List[Document] | List[tuple[Document, float]]:
@@ -264,7 +264,7 @@ def perform_semantic_search(
         query (str): The search query text
         context (dict): Tenant/channel context containing configuration
         k (int): Number of documents to retrieve (default: 5)
-        score_threshold (float, optional): Minimum similarity score (default: 0.7)
+        score_threshold (float, optional): Minimum similarity score (default: None, no filtering)
         include_scores (bool): Whether to return similarity scores (default: False)
         enable_reranking (bool): Whether to apply LLM reranking (default: True)
         

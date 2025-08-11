@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, AliasChoices
 
 from utils.logging_config import logger
 
@@ -62,6 +62,7 @@ class TenantConfig(BaseModel):
     guild_id: int                           # Discord guild (server) ID
     name: str                              # Human-readable tenant name
     description: str                       # Tenant description
+    admin_role_id: Optional[int] = None     # Discord role ID for admin access to file uploads
     calendar_id: Optional[str]             # Google Calendar ID for this tenant
     tasklist_id: Optional[str]             # Google Tasks list ID for this tenant
     data_dir: str                         # Base directory for tenant data
@@ -85,33 +86,38 @@ class AppSettings(BaseSettings):
     All sensitive data (API keys, credentials) should be stored in environment
     variables or .env file, never hardcoded. This class validates that all
     required settings are present and non-empty.
-    """    # Discord Bot Configuration
-    discord_token: str = Field(description="Discord bot token")
+    """
+    # Discord Bot Configuration
+    discord_token: str = Field(default="", description="Discord bot token")
     
     # OpenAI API Configuration  
-    openai_api_key: str = Field(description="OpenAI API key")
-    openai_vision_model: str = Field(description="OpenAI vision model to use")
+    openai_api_key: str = Field(default="", description="OpenAI API key")
+    openai_vision_model: str = Field(default="gpt-4o", description="OpenAI vision model to use")
     
     # Pinecone Vector Database Configuration
-    pinecone_api_key: str = Field(description="Pinecone API key")
+    pinecone_api_key: str = Field(default="", description="Pinecone API key")
     
     # Supabase Database Configuration
-    supabase_url: str = Field(description="Supabase project URL")
-    supabase_api_key: str = Field(description="Supabase API key")
+    supabase_url: str = Field(default="", description="Supabase project URL")
+    supabase_api_key: str = Field(default="", description="Supabase API key")
     
     # AWS S3 Configuration
-    aws_access_key_id: str = Field(description="AWS access key ID")
-    aws_secret_access_key: str = Field(description="AWS secret access key")
-    aws_region_name: str = Field(default="ca-central-1", description="AWS region name")
+    aws_access_key_id: str = Field(default="", description="AWS access key ID")
+    aws_secret_access_key: str = Field(default="", description="AWS secret access key")
+    aws_region_name: str = Field(
+        default="ca-central-1", 
+        description="AWS region name",
+        validation_alias=AliasChoices('aws_region_name', 'AWS_REGION_NAME', 'AWS_REGION')
+    )
     
     # Configuration File Paths
     tenants_file: str = Field(default="tenants.json", description="Path to tenants configuration file")
 
     model_config = SettingsConfigDict(
-        env_file = ".env",           # Load from .env file if present
-        env_file_encoding = "utf-8", # Handle unicode in environment files
-        case_sensitive = False,      # Allow case-insensitive env var names
-        extra = "ignore"            # Ignore unknown environment variables
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore"
     )
     
     @field_validator(
