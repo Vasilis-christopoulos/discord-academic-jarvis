@@ -11,25 +11,42 @@
       "s3_image_prefix": "images/test/",
       "s3_raw_docs_prefix": "raw_docs/test/",
       "s3_bucket": "test-bucket",
-      "channels": {
+      "category_permissions": {
+        "100": {
+          "name": "Test Courses",
+          "features": ["rag", "calendar"],
+          "default_data_dir": "data/111/courses",
+          "default_vector_store_path": "vector_store/111/courses"
+        },
+        "200": {
+          "name": "Test Events",
+          "features": ["calendar"],
+          "default_data_dir": "data/111/events",
+          "default_vector_store_path": "vector_store/111/events"
+        }
+      },
+      "default_features": [],
+      "default_data_dir_template": "data/{guild_id}/{channel_id}",
+      "default_vector_store_template": "vector_store/{guild_id}/{channel_id}",
+      "channel_overrides": {
         "222": {
           "name": "test-channel1",
-          "description": "Test channel",
-          "type": "rag",
+          "description": "Test channel", 
+          "features": ["rag"],
           "data_dir": "data/111/course_A",
           "vector_store_path": "vector_store/111/course_A"
         },
         "333": {
           "name": "test-channel2",
           "description": "Test channel",
-          "type": "calendar",
+          "features": ["calendar"],
           "data_dir": "data/111/course_B",
           "vector_store_path": "vector_store/111/course_B"
         },
         "444": {
           "name": "test-channel3",
           "description": "Test channel",
-          "type": "rag-calendar",
+          "features": ["rag", "calendar"],
           "data_dir": "data/111/course_C",
           "vector_store_path": "vector_store/111/course_C"
         }

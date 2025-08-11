@@ -12,28 +12,49 @@
         "s3_raw_docs_prefix": "raw_docs/",
         "s3_image_prefix": "images/",
         "s3_bucket": "mma8-discord-project",
-        "channels" : {
-            "1361356485229150292": {
-                "name": "general",
-                "description": "Main channel",
-                "data_dir": "data/1361356484478500865/1361356485229150292",
-                "vector_store_path": "rag_module/vector_store/1361356484478500865/1361356485229150292",
-                "type": "rag-calendar"
+        "category_permissions": {
+            "1401971401052786921": {
+                "name": "Courses",
+                "features": ["rag", "calendar"],
+                "default_data_dir": "data/1361356484478500865/courses",
+                "default_vector_store_path": "rag_module/vector_store/1361356484478500865/courses"
             },
-            "1361365367204876378": {
-                "name": "test1",
-                "description": "Test channel",
-                "data_dir": "data/1361356484478500865/1361365367204876378",
-                "vector_store_path": "rag_module/vector_store/1361356484478500865/1361365367204876378",
-                "type": "rag-calendar"
+            "1401981554326245416": {
+                "name": "Events & Opportunities",
+                "features": ["calendar"],
+                "default_data_dir": "data/1361356484478500865/events",
+                "default_vector_store_path": "rag_module/vector_store/1361356484478500865/events"
             },
-            "1361365391309275277": {
-                "name": "test2",
-                "description": "Test channel",
-                "data_dir": "data/1361356484478500865/1361365391309275277",
-                "vector_store_path": "rag_module/vector_store/1361356484478500865/1361365391309275277",
-                "type": "rag-calendar"
+            "1401976923344732310": {
+                "name": "Tech, Data & AI",
+                "features": [],
+                "default_data_dir": "data/1361356484478500865/tech",
+                "default_vector_store_path": "rag_module/vector_store/1361356484478500865/tech"
+            },
+            "1401981229875593287": {
+                "name": "Business & Strategy",
+                "features": [],
+                "default_data_dir": "data/1361356484478500865/business",
+                "default_vector_store_path": "rag_module/vector_store/1361356484478500865/business"
+            },
+            "1401971660692783227": {
+                "name": "Study rooms",
+                "features": ["rag", "calendar"],
+                "default_data_dir": "data/1361356484478500865/study_rooms",
+                "default_vector_store_path": "rag_module/vector_store/1361356484478500865/study_rooms"
+            },
+            "1401974799877669108": {
+                "name": "Sports & Social",
+                "features": ["calendar"],
+                "default_data_dir": "data/1361356484478500865/sports_social",
+                "default_vector_store_path": "rag_module/vector_store/1361356484478500865/sports_social"
             }
+        },
+        "default_features": [],
+        "default_data_dir_template": "data/{guild_id}/{channel_id}",
+        "default_vector_store_template": "rag_module/vector_store/{guild_id}/{channel_id}",
+        "channel_overrides": {
+            
         }
     }
 }

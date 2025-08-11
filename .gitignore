@@ -85,6 +85,21 @@ tenants.json
 *.temp
 response.json
 
+# Development and debug files
+debug_*.py
+test_*.py
+verify_*.py
+reset_*.py
+*_test.py
+*_debug.py
+
+# Temporary documentation
+*_SUMMARY.md
+*_GUIDE.md
+FIXED_*.md
+CALENDAR_OPTIMIZATION_*.md
+WISDOM_WARNING_*.md
+
 # AWS and deployment
 .aws/
 *.pem

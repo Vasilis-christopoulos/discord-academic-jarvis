@@ -19,6 +19,7 @@ Google Calendar and Tasks APIs for real-time data.
 
 import pytz
 import datetime as dt
+from typing import Union
 
 from utils.calendar_utils import parse_iso, html_to_discord_md, format_iso_to_local
 from utils.reranker_calendar import rerank_llm
@@ -39,7 +40,7 @@ _store = get_vector_store("calendar-hybrid")                              # Pine
 _index = _store._index                                     # Direct Pinecone index access
 _zero_vec = [0.0] * 3072                                  # Zero vector for window-only queries
 
-async def respond(query: str, context: dict) -> str:
+async def respond(query: str, context: dict) -> Union[str, list[Embed]]:
     """
     Process calendar/task queries and return formatted results.
     
@@ -68,27 +69,50 @@ async def respond(query: str, context: dict) -> str:
     # 1) Parse the natural language query into structured data
     tz = pytz.timezone(context.get("timezone", "America/Toronto"))
     now = dt.datetime.now(tz)
-    parsed = await parse_query(query, now)
+    parsed = await parse_query(query, now.isoformat())
     
     # Check if this is actually a calendar/task query
     if not parsed.applicable:
         return "❌ This query is not applicable to calendar or task management."
 
-    # 2) Sync data from Google APIs
-    # Incremental sync for recent changes (fast)
-    await delta_sync_calendar(context)
-    await delta_sync_tasks(context)
+    # 2) Smart incremental sync - only run if enough time has passed
+    # This respects your efficient delta_sync while avoiding redundant calls
+    from .sync_cache import SyncCache
+    
+    if not SyncCache.should_skip_sync(max_age_minutes=2):
+        logger.debug("Running incremental delta sync")
+        await delta_sync_calendar(context)
+        await delta_sync_tasks(context)
+        SyncCache.set_last_sync_time()
+    else:
+        logger.debug("Skipping delta sync - recent sync completed")
+    
+    # 3) Only run expensive bulk sync if we haven't done it recently
+    from .sync_cache import SyncCache
+    if not SyncCache.should_skip_sync(max_age_minutes=10):
+        logger.debug("Performing bulk sync for query time window")
+        # Bulk sync for the query time window (ensures completeness)
+        # Only sync if we have valid parsed data
+        if parsed.type and parsed.date_from and parsed.date_to:
+            await ensure_synced(
+                type_=parsed.type,
+                date_from=parsed.date_from,
+                date_to=parsed.date_to,     
+                context=context,
+            )
+        else:
+            logger.debug("Skipping bulk sync - incomplete query parse")
+        
+        # Record successful bulk sync
+        SyncCache.set_last_sync_time()
+    else:
+        logger.debug("Skipping bulk sync - recent bulk sync available")
 
-    # Bulk sync for the query time window (ensures completeness)
-    await ensure_synced(
-        type_=parsed.type,
-        date_from=parsed.date_from,
-        date_to=parsed.date_to,     
-        context=context,
-    )
-
-    # 3) Build temporal filter for database query
+    # 4) Build temporal filter for database query
     # Convert RFC 3339 dates to Unix timestamps for Pinecone filtering
+    if not parsed.date_from:
+        return "❌ Could not parse date range from query."
+        
     ts_from = int(parse_iso(parsed.date_from).timestamp())
     ts_to = int(parse_iso(parsed.date_to).timestamp()) \
             if parsed.date_to else ts_from  # Safety guard for missing end date
@@ -103,30 +127,34 @@ async def respond(query: str, context: dict) -> str:
     
     # Add type filter if specified (events, tasks, or both)
     if parsed.type and parsed.type != "both":
-        meta_filter["$and"].append({"type": {"$eq": parsed.type}})
+        meta_filter["$and"].append({"type": {"$eq": parsed.type}})  # type: ignore
 
-    # 4) Perform semantic search
+    # 5) Perform semantic search
     query_text = (parsed.filter or '').strip()
+    limit = parsed.limit or 10  # Default limit if not specified
     
     if query_text == "":
         # Time window only query - no semantic search needed
         logger.debug("Window-only query")
+        if _index is None:
+            return "❌ Vector index not available."
+            
         res = _index.query(
             vector=_zero_vec,              # Neutral vector for non-semantic search
-            top_k=parsed.limit,
-            filter=meta_filter,
+            top_k=limit,
+            filter=meta_filter,  # type: ignore
             include_metadata=True,
         )
         cand_docs = [
-            Document(page_content=m["metadata"]["text"], metadata=m["metadata"])
-            for m in res["matches"]
+            Document(page_content=m["metadata"]["text"], metadata=m["metadata"])  # type: ignore
+            for m in res["matches"]  # type: ignore
         ]
         docs = cand_docs
     else:
         # Hybrid search: combine semantic similarity with temporal filtering
         cand_docs = hybrid_search_relative_band(
             query=parsed.filter or query,
-            k=max(10, parsed.limit * 4),  # Get more candidates for reranking
+            k=max(10, limit * 4),  # Get more candidates for reranking
             meta_filter=meta_filter,
             index=_index,      
             embed=_embed,      
@@ -135,13 +163,13 @@ async def respond(query: str, context: dict) -> str:
         if not cand_docs:
             return "No results found."
         
-        # 5) Rerank results using LLM for better relevance
-        docs = rerank_llm(query, cand_docs)[:parsed.limit]
+        # 6) Rerank results using LLM for better relevance
+        docs = rerank_llm(query, cand_docs)[:limit]
 
     if not docs:
         return "No results found."
 
-    # 6) Format and return results
+    # 7) Format and return results
     tz = pytz.timezone(context.get("timezone","America/Toronto"))
     embeds: list[Embed] = []
 

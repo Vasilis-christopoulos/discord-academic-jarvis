@@ -3,7 +3,8 @@ from typing import Optional
 import discord
 from discord import app_commands
 from discord.ext import commands
-from tenant_context import load_tenant_context
+from tenant_context import load_tenant_context_async
+from utils.channel_discovery import has_feature_access
 from settings import settings
 from rag_module.rag_handler_optimized import respond as rag_respond
 from rag_module.file_validator import get_file_validator
@@ -83,9 +84,20 @@ async def build_ctx_cfg(inter: discord.Interaction) -> Optional[dict]:
     guild_id = inter.guild_id or 0
     channel_id = inter.channel_id or 0
     
-    cfg = load_tenant_context(guild_id, channel_id)
+    # Get the actual channel object for category detection
+    channel = None
+    if inter.channel and isinstance(inter.channel, discord.TextChannel):
+        channel = inter.channel
     
-    # If no configuration found, return None to signal unauthorized access
+    # Use the new async tenant context loader that supports category-based permissions
+    cfg = await load_tenant_context_async(guild_id, channel_id, bot)
+    
+    # If no configuration found, try with channel object for category detection
+    if not cfg and channel:
+        from tenant_context import load_tenant_context
+        cfg = load_tenant_context(guild_id, channel_id, channel)
+    
+    # If still no configuration found, return None to signal unauthorized access
     if not cfg:
         return None
     
@@ -173,6 +185,16 @@ async def jarvis_rag(inter: discord.Interaction, query: str):
     ctx = await check_channel_authorization(inter)
     if not ctx:
         return  # Error message already sent
+    
+    # Check if RAG feature is enabled for this channel
+    if not await has_feature_access(inter.channel_id or 0, 'rag'):
+        embed = discord.Embed(
+            title="❌ Feature Not Available", 
+            description="RAG feature is not enabled in this channel.",
+            color=discord.Color.red()
+        )
+        await send_answer(inter, embed)
+        return
         
     # Pass user_id for rate limiting
     result = await rag_respond(query, ctx, str(inter.user.id))
@@ -186,9 +208,20 @@ async def jarvis_rag(inter: discord.Interaction, query: str):
 async def jarvis_calendar(inter: discord.Interaction, query: str):
     await inter.response.defer()
     
+    # Check channel authorization first
     ctx = await check_channel_authorization(inter)
     if not ctx:
         return  # Error message already sent
+    
+    # Check if calendar feature is enabled for this channel
+    if not await has_feature_access(inter.channel_id or 0, 'calendar'):
+        embed = discord.Embed(
+            title="❌ Feature Not Available",
+            description="Calendar feature is not enabled in this channel.",
+            color=discord.Color.red()
+        )
+        await send_answer(inter, embed)
+        return
         
     result = await cal_respond(query, ctx)
     await send_answer(inter, result)
@@ -587,6 +620,11 @@ async def on_ready():
     # ---- Sync new root commands ----
     
     await tree.sync()   # force push to all guilds
+
+    # Initialize channel discovery service for category-based permissions
+    from utils.channel_discovery import initialize_discovery_service
+    initialize_discovery_service(bot)
+    logger.info("Initialized channel discovery service")
 
     logger.info("Jarvis online as %s", bot.user)
 

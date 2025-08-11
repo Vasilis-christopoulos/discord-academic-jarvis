@@ -34,21 +34,33 @@ from pydantic import BaseModel, Field, field_validator, AliasChoices
 
 from utils.logging_config import logger
 
-class ChannelConfig(BaseModel):
+class CategoryPermissionConfig(BaseModel):
     """
-    Configuration model for individual Discord channels.
+    Configuration model for Discord channel categories and their feature permissions.
+    """
+    name: str                           # Human-readable category name
+    features: List[str]                # List of available features: 'rag', 'calendar', etc.
+    default_data_dir: str              # Default data directory for channels in this category
+    default_vector_store_path: str     # Default vector store path for channels in this category
     
-    Each channel can have its own data directories and module access controls.
-    The 'type' field determines which bot modules are available in this channel.
-    """
-    name: str                # Human-readable channel name
-    description: str         # Channel description for documentation
-    data_dir: str           # Directory for channel-specific data storage
-    vector_store_path: str  # Directory for channel-specific vector database
-    type: str              # Module access control: 'rag', 'calendar', 'rag-calendar', etc.
-
     model_config = {
-        "extra": "forbid"  # Reject unknown fields to catch configuration errors
+        "extra": "forbid"
+    }
+
+
+class ChannelOverrideConfig(BaseModel):
+    """
+    Configuration model for individual channel overrides.
+    Used when a specific channel needs different settings than its category default.
+    """
+    name: Optional[str] = None         # Human-readable channel name
+    description: Optional[str] = None  # Channel description
+    features: Optional[List[str]] = None  # Override features (if different from category)
+    data_dir: Optional[str] = None     # Override data directory
+    vector_store_path: Optional[str] = None  # Override vector store path
+    
+    model_config = {
+        "extra": "forbid"
     }
 
 
@@ -57,7 +69,7 @@ class TenantConfig(BaseModel):
     Configuration model for Discord guilds (servers) and their channels.
     
     Represents a tenant in the multi-tenant architecture. Each guild can have
-    multiple channels with different configurations and access controls.
+    category-based permissions with optional channel-specific overrides.
     """
     guild_id: int                           # Discord guild (server) ID
     name: str                              # Human-readable tenant name
@@ -72,7 +84,17 @@ class TenantConfig(BaseModel):
     s3_image_prefix: str                 # S3 prefixes for storing images
     s3_raw_docs_prefix: str          # S3 prefixes for storing raw documents
     s3_bucket: str             # S3 bucket name for storing tenant data
-    channels: Dict[int, ChannelConfig]    # Channel ID -> Channel configuration mapping
+    
+    # Category-based permissions (replaces the old channels dict)
+    category_permissions: Dict[int, CategoryPermissionConfig] = {}
+    
+    # Fallback settings for channels not in configured categories
+    default_features: List[str] = []
+    default_data_dir_template: str = "data/{guild_id}/{channel_id}"
+    default_vector_store_template: str = "rag_module/vector_store/{guild_id}/{channel_id}"
+    
+    # Manual overrides for specific channels
+    channel_overrides: Dict[int, ChannelOverrideConfig] = {}
 
     model_config = {
         "extra": "forbid"  # Reject unknown fields to catch configuration errors
@@ -160,4 +182,7 @@ for guild_str, cfg in raw.items():
         raise RuntimeError(f"Invalid tenant configuration for guild {guild_str}: {e}")
 
 # Log successful configuration loading
-logger.info("loaded settings; tenants=%d index=%s", len(TENANT_CONFIGS), TENANT_CONFIGS[0].index_calendar)
+if TENANT_CONFIGS:
+    logger.info("loaded settings; tenants=%d index=%s", len(TENANT_CONFIGS), TENANT_CONFIGS[0].index_calendar)
+else:
+    logger.warning("No tenant configurations loaded")

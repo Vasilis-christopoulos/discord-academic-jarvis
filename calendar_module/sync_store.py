@@ -117,7 +117,8 @@ def set_calendar_sync_token(token: Optional[str]) -> None:
     try:
         supabase = get_supabase_client()
         
-        (
+        # Use update since records already exist
+        response = (
             supabase.table("sync_state")
             .update({"calendar_sync_token": token})
             .eq("module", MODULE_NAME)
@@ -168,7 +169,8 @@ def set_tasks_last_updated(timestamp: str) -> None:
     try:
         supabase = get_supabase_client()
         
-        (
+        # Use update since records already exist
+        response = (
             supabase.table("sync_state")
             .update({"tasks_last_updated": timestamp})
             .eq("module", MODULE_NAME)
