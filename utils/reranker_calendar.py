@@ -24,6 +24,26 @@ def _clean(text: str, max_tokens: int = 60) -> str:
     return text[:limit] + ("…" if len(text) > limit else "")
 
 def rerank_llm(query: str, docs: List[Document]) -> List[Document]:
+    """
+    Rerank calendar documents using LLM-based relevance scoring.
+    
+    This function takes a list of calendar events and tasks retrieved from
+    semantic search and reranks them based on semantic relevance to the user's
+    query using an LLM. It formats the documents for the LLM, gets relevance
+    scores, and returns the documents sorted by relevance.
+    
+    Args:
+        query: User's natural language query about calendar events/tasks
+        docs: List of Document objects from initial semantic search
+        
+    Returns:
+        List[Document]: Reranked documents sorted by relevance (most relevant first)
+        
+    Note:
+        - Handles both calendar events and tasks with appropriate formatting
+        - Includes location and timing information for better context
+        - Limits to top 20 items to manage token usage
+    """
     # Early exit for empty input
     if not docs:
         return []

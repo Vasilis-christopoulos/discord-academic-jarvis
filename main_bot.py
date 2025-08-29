@@ -80,6 +80,16 @@ tree: app_commands.CommandTree = bot.tree
 # Context helper (tenant aware)
 # ──────────────────────────────────────────────
 async def build_ctx_cfg(inter: discord.Interaction) -> Optional[dict]:
+    """
+    Build tenant context configuration from Discord interaction.
+    
+    Args:
+        inter: Discord interaction object containing guild/channel/user info
+        
+    Returns:
+        Dictionary containing tenant config with guild_id, channel_id, user_id, etc.
+        None if channel is not authorized for bot usage.
+    """
     # Handle None values for guild_id and channel_id
     guild_id = inter.guild_id or 0
     channel_id = inter.channel_id or 0
@@ -124,7 +134,13 @@ async def build_ctx_cfg(inter: discord.Interaction) -> Optional[dict]:
 # Utility: send answer after defer
 # ──────────────────────────────────────────────
 async def send_answer(inter: discord.Interaction, payload):
-    """Payload may be str, Embed, or list[Embed]."""
+    """
+    Send response to Discord interaction with proper embed formatting.
+    
+    Args:
+        inter: Discord interaction to respond to
+        payload: Response content - can be str, Embed, or list[Embed]
+    """
     if isinstance(payload, discord.Embed):
         embeds = [payload]
     elif isinstance(payload, list) and all(isinstance(e, discord.Embed) for e in payload):
@@ -180,6 +196,17 @@ async def check_channel_authorization(inter: discord.Interaction) -> Optional[di
 @tree.command(name="jarvis_rag", description="Ask the notes RAG assistant")
 @app_commands.describe(query="Your question")
 async def jarvis_rag(inter: discord.Interaction, query: str):
+    """
+    Handle RAG (Retrieval-Augmented Generation) queries from Discord users.
+    
+    This command allows users to ask questions about uploaded documents and notes.
+    It checks channel permissions, verifies feature access, and enforces rate limits
+    before processing the query through the RAG system.
+    
+    Args:
+        inter: Discord interaction object containing user, channel, and guild info
+        query: User's natural language question about the documents
+    """
     await inter.response.defer()
     
     ctx = await check_channel_authorization(inter)
@@ -206,6 +233,17 @@ async def jarvis_rag(inter: discord.Interaction, query: str):
 @tree.command(name="jarvis_calendar", description="Ask calendar questions")
 @app_commands.describe(query="Your calendar query")
 async def jarvis_calendar(inter: discord.Interaction, query: str):
+    """
+    Handle calendar and task queries from Discord users.
+    
+    This command processes natural language queries about calendar events and tasks.
+    It syncs with Google Calendar/Tasks, performs semantic search, and returns
+    formatted results with relevant events and deadlines.
+    
+    Args:
+        inter: Discord interaction object containing user, channel, and guild info
+        query: User's natural language question about calendar events or tasks
+    """
     await inter.response.defer()
     
     # Check channel authorization first
@@ -232,6 +270,17 @@ async def jarvis_calendar(inter: discord.Interaction, query: str):
 @tree.command(name="jarvis_upload", description="Upload a document for processing")
 @app_commands.describe(file="Document to upload (PDF, DOCX, TXT, MD)")
 async def jarvis_upload(inter: discord.Interaction, file: discord.Attachment):
+    """
+    Handle document uploads for RAG processing.
+    
+    This command validates uploaded documents, checks admin permissions,
+    enforces file size and format restrictions, and ingests valid documents
+    into the RAG system for future queries.
+    
+    Args:
+        inter: Discord interaction object containing user, channel, and guild info
+        file: Discord attachment containing the document to upload and process
+    """
     await inter.response.defer()
     
     # Check channel authorization first

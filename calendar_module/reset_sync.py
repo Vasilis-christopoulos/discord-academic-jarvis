@@ -14,6 +14,16 @@ supabase = create_client(SUPA_URL, SUPA_KEY)
 pc = Pinecone(api_key=settings.pinecone_api_key)
 
 def reset_watermarks():
+    """
+    Reset calendar sync watermarks and tokens to initial state.
+    
+    This function clears all synchronization state for both calendar events
+    and tasks, forcing a complete re-sync on the next synchronization run.
+    It resets:
+    - Event and task sync timestamps to INITIAL_ISO date
+    - Calendar sync token (for incremental event syncing)
+    - Tasks last updated timestamp
+    """
     try:
         # Reset sync timestamps
         for type_ in ("event", "task"):
@@ -36,6 +46,13 @@ def reset_watermarks():
         print(f"❌ Error resetting watermarks: {e}")
 
 def reset_pinecone():
+    """
+    Clear all calendar data from the Pinecone vector database.
+    
+    This function deletes all vectors from the calendar Pinecone index,
+    effectively removing all stored calendar events and tasks from the
+    vector database. Use with caution as this operation cannot be undone.
+    """
     try:
         # Use the default calendar index name from tenant config
         calendar_index = "calendar-hybrid"  # Default calendar index
