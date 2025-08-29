@@ -42,8 +42,7 @@ from settings import settings
 llm = ChatOpenAI(
     model="gpt-4o-mini",  # Using efficient model for cost optimization
     temperature=0.1,  # Low temperature for consistent, factual responses
-    api_key=settings.openai_api_key,
-    request_timeout=30.0,  # 30 second timeout for API calls
+    api_key=settings.openai_api_key,  # type: ignore
     max_retries=0  # We handle retries in our resilience layer
 )
 
@@ -198,6 +197,10 @@ async def _retrieve_documents_safely(
             timeout_seconds=30.0,
             retry_config=RetryConfig(max_attempts=3, base_delay=2.0)
         )
+        
+        # Ensure documents is a list
+        if not isinstance(documents, list):
+            documents = []
         
         logger.debug("Retrieved %d documents [%s]: '%s'", 
                     len(documents), correlation_id, query[:50])
@@ -367,6 +370,10 @@ async def _generate_response_safely(
                 max_delay=60.0
             )
         )
+        
+        # Ensure response_text is a string
+        if not isinstance(response_text, str):
+            response_text = str(response_text)
         
         logger.debug("Generated response [%s]: %d chars", correlation_id, len(response_text))
         return response_text

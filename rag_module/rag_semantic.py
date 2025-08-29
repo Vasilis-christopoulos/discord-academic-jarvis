@@ -119,6 +119,19 @@ class SemanticSearcher:
                 documents = documents[:k]
                 logger.debug("Applied reranking, final count: %d documents", len(documents))
             
+            # CITATION FIX: Prefer PDF documents over calendar/task data
+            # If we have both PDF documents (with filename) and calendar data, prioritize PDFs
+            pdf_documents = [doc for doc in documents if doc.metadata.get('filename')]
+            calendar_documents = [doc for doc in documents if not doc.metadata.get('filename')]
+            
+            if pdf_documents:
+                # Prefer PDF documents and take calendar documents only if we need more
+                documents = pdf_documents[:k]
+                if len(documents) < k and calendar_documents:
+                    documents.extend(calendar_documents[:k - len(documents)])
+                logger.debug("Applied PDF preference: %d PDF docs, %d calendar docs", 
+                           len(pdf_documents), len(calendar_documents))
+            
             return documents
                 
         except Exception as e:
@@ -231,6 +244,18 @@ def create_metadata_filter(
     # 1. Re-upload documents with guild_id metadata, or
     # 2. Use a different field like 'source' for filtering, or
     # 3. Use separate indices per tenant
+    
+    # CITATION FIX: Prefer PDF documents over calendar/task data
+    # The index contains both PDF chunks (with filename metadata) and calendar tasks.
+    # We prioritize PDF documents by filtering for documents that have a filename field.
+    # This ensures we get proper citations with [filename.pdf#page-X] format instead of
+    # generic [Document 1] citations from calendar data.
+    prefer_pdfs = tenant_config.get("prefer_pdf_documents", True)
+    if prefer_pdfs:
+        # Note: Pinecone might not support $exists operator. 
+        # Let's try a more permissive approach - we'll first try without filtering
+        # and add PDF preference at the search level instead
+        logger.debug("PDF preference enabled - will prioritize documents with filename metadata during search")
     
     # For now, we'll use additional_filters only if provided
     if additional_filters:

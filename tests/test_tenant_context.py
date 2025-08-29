@@ -26,7 +26,6 @@ def mock_tenant_configs():
 
 def test_global_context(tmp_path: Path, mock_tenant_configs: List[TenantConfig]) -> None:
     ctx = tenant_context.load_tenant_context(111, 999)
-    print(ctx) # debug
     assert ctx is not None, "Context should not be None"
     assert ctx["name"] == "testguild"
     assert "calendar_id" in ctx

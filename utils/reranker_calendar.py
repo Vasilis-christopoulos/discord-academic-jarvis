@@ -120,8 +120,6 @@ def rerank_llm(query: str, docs: List[Document]) -> List[Document]:
         assert isinstance(ids, list)
     except Exception:
         return docs
-    logger.debug(ids)
+    
     ranked = [docs[i] for i in ids if 0 <= i < len(docs)]
-    logger.debug("rerank: %d", len(docs))
-
     return ranked

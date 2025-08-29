@@ -153,27 +153,3 @@ class SyncCache:
             return True
         
         return False
-
-# Usage example
-def example_optimized_sync():
-    """Example of how to use the optimized sync cache."""
-    cache = SyncCache()
-    
-    # Check if we can skip sync
-    if cache.should_skip_sync(max_age_minutes=2):
-        print("⚡ Skipping sync - recent data available")
-        return
-    
-    # Get tokens with fallback
-    calendar_token = cache.get_calendar_sync_token()
-    tasks_updated = cache.get_tasks_last_updated()
-    
-    print(f"Calendar token: {'✅' if calendar_token else '❌'}")
-    print(f"Tasks updated: {'✅' if tasks_updated else '❌'}")
-    
-    # After successful sync
-    cache.set_last_sync_time()
-    print("✅ Sync completed and cached")
-
-if __name__ == "__main__":
-    example_optimized_sync()

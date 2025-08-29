@@ -28,16 +28,9 @@ from .rag_validator import (
     QueryValidationError,
     ContextTooLargeError
 )
-from .rag_resilience import (
-    safe_execute,
-    RetryConfig,
-    RAGTimeoutError,
-    RAGRetryExhaustedError,
-    RAGCircuitBreakerError
-)
-from .rag_cache import get_cache_manager, RAGCacheManager
+from .rag_cache import get_cache_manager
 from .simple_connection_manager import get_connection_manager
-from .rate_limiter import get_rate_limiter, RateLimitConfig, DailyRateLimiter
+from .rate_limiter import get_rate_limiter, RateLimitConfig
 from .database_utils import get_supabase_client
 from langchain_openai import ChatOpenAI
 from utils.logging_config import logger
@@ -49,8 +42,13 @@ class OptimizedRAGHandler:
     
     def __init__(self, cache_config: Optional[Dict[str, Any]] = None):
         """Initialize optimized RAG handler."""
+        # Initialize cache and connection managers
         self.cache_manager = get_cache_manager(cache_config)
         self.connection_manager = get_connection_manager()
+        
+        # Clear context cache to ensure fresh citations
+        logger.info("Clearing context cache to ensure fresh citation formatting")
+        self.cache_manager.context_cache.clear()
         
         # Initialize rate limiter
         self.rate_limiter = get_rate_limiter(
@@ -63,8 +61,8 @@ class OptimizedRAGHandler:
             model="gpt-4o-mini",
             temperature=0.1,
             api_key=settings.openai_api_key,  # type: ignore
-            timeout=30.0,  # Fixed parameter name
-            max_retries=2  # Enable some retries for connection issues
+            timeout=30.0,
+            max_retries=2
         )
         
         # Performance tracking
@@ -78,20 +76,19 @@ class OptimizedRAGHandler:
         # RAG prompt template
         self.prompt_template = PromptTemplate(
             input_variables=["query", "context"],
-            template="""You are an academic assistant helping students with their coursework. 
-Based on the provided context from course materials, answer the question accurately and helpfully.
+            template="""You are an academic assistant. Answer the student's question using ONLY the provided context.
 
-Context from course materials:
+Context:
 {context}
 
-Student Question: {query}
+Question: {query}
 
 Instructions:
-- Provide a clear, comprehensive answer based on the context
-- Include specific citations in square brackets [filename.pdf#page-X] 
-- If information is insufficient, acknowledge limitations
-- Use academic language appropriate for university students
-- Focus on being helpful and educational
+- Answer concisely using ONLY information from the context above
+- Include citations in square brackets for every claim [filename.pdf#page-X]
+- If the context doesn't contain the answer, say "The provided documents do not contain information about this topic"
+- Keep your response brief and focused
+- Do NOT use external knowledge or make assumptions
 
 Answer:"""
         )
@@ -338,7 +335,7 @@ Answer:"""
             raise
     
     def _format_context(self, documents: List[Document]) -> str:
-        """Format documents into context string."""
+        """Format documents into context string with proper citations."""
         if not documents:
             return ""
         
@@ -346,14 +343,64 @@ Answer:"""
         for i, doc in enumerate(documents, 1):
             # Extract metadata for citation
             metadata = doc.metadata
-            citation = metadata.get('citation_anchor', f'doc{i}')
+            
+            # Try to build a proper citation from metadata
+            citation = self._build_citation(metadata, i)
             
             # Format document content
             content = doc.page_content.strip()
             if content:
-                context_parts.append(f"Document {i}:\n{content}\n[Citation: [{citation}]]\n")
+                context_parts.append(f"Document {i}:\n{content}\n[Citation: {citation}]\n")
         
         return "\n".join(context_parts)
+    
+    def _build_citation(self, metadata: Dict[str, Any], doc_index: int) -> str:
+        """Build a proper citation from document metadata."""
+        
+        # First, try to use the pre-built citation_anchor (preferred)
+        citation_anchor = metadata.get('citation_anchor', '')
+        if citation_anchor and not citation_anchor.startswith('doc'):
+            return f"[{citation_anchor}]"
+        
+        # Build citation from filename and page_number
+        filename = metadata.get('filename', '')
+        page_number = metadata.get('page_number', '')
+        
+        if filename and page_number:
+            # Clean filename (remove path if present)
+            clean_filename = filename.split('/')[-1] if '/' in filename else filename
+            citation = f"[{clean_filename}#page-{page_number}]"
+            return citation
+        
+        # If we have filename but no page number
+        if filename:
+            clean_filename = filename.split('/')[-1] if '/' in filename else filename
+            citation = f"[{clean_filename}]"
+            return citation
+        
+        # Try to extract filename from source path
+        source = metadata.get('source', '')
+        if source:
+            # Extract filename from S3 key or path (e.g., "raw_docs/file.pdf" -> "file.pdf")
+            if '/' in source:
+                filename = source.split('/')[-1]
+                if page_number:
+                    citation = f"[{filename}#page-{page_number}]"
+                    return citation
+                else:
+                    citation = f"[{filename}]"
+                    return citation
+            else:
+                if page_number:
+                    citation = f"[{source}#page-{page_number}]"
+                    return citation
+                else:
+                    citation = f"[{source}]"
+                    return citation
+        
+        # Last resort: use a descriptive generic format
+        citation = f"[Document {doc_index}]"
+        return citation
     
     def _update_performance_stats(self, response_time: float):
         """Update performance statistics."""

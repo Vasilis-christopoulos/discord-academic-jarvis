@@ -95,7 +95,7 @@ class DailyRateLimiter:
                 raise Exception("No data returned from check_user_limit")
             
             data = result.data[0]
-            current_count = data['current_count']
+            current_count = data.get('current_count', 0) or 0  # Handle None values
             
             # Get the appropriate limit based on limit type
             if limit_type == "rag_requests":
@@ -179,7 +179,7 @@ class DailyRateLimiter:
                 raise Exception("No data returned from check_global_limit")
 
             data = result.data[0]
-            current_count = data['current_count']
+            current_count = data.get('current_count', 0) or 0  # Handle None values
             
             # Get the appropriate limit based on limit type
             if limit_type == "total_file_uploads":
@@ -241,7 +241,7 @@ class DailyRateLimiter:
         try:
             result = self.supabase.rpc(
                 'increment_user_count',
-                {'p_user_id': int(user_id), 'p_limit_type': limit_type}
+                {'p_user_id': user_id, 'p_limit_type': limit_type}
             ).execute()
             
             new_count = result.data if result.data else 0
@@ -293,9 +293,9 @@ class DailyRateLimiter:
             self.supabase.rpc(
                 'track_openai_usage',
                 {
-                    'p_user_id': int(user_id),
-                    'p_tokens': tokens,
-                    'p_estimated_cost': cost,
+                    'p_user_id': user_id,
+                    'p_tokens_used': tokens,
+                    'p_cost': cost,
                     'p_model': model
                 }
             ).execute()
@@ -316,22 +316,25 @@ class DailyRateLimiter:
             Dict[str, Any]: User's current usage stats
         """
         try:
-            # Convert user_id to int for database query
-            user_id_int = int(user_id)
+            # Use user_id as string directly
+            user_id_str = str(user_id)
             
             # Get user limits
             user_result = self.supabase.table('rate_limits').select('*').eq(
-                'user_id', user_id_int
+                'user_id', user_id_str
             ).execute()
             
             logger.debug(f"User limits query result for {user_id}: {len(user_result.data)} records")
             
-            # Get OpenAI usage for today (in Toronto timezone)
+            # Get OpenAI usage for today (and yesterday to handle timezone issues)
             now_toronto = datetime.now(self.timezone)
             today_str = now_toronto.date().isoformat()
+            yesterday_str = (now_toronto.date() - timedelta(days=1)).isoformat()
+            
+            # Try both today and yesterday due to potential timezone issues in the database
             openai_result = self.supabase.table('openai_usage_tracking').select('*').eq(
-                'user_id', user_id_int
-            ).eq('date_toronto', today_str).execute()
+                'user_id', user_id_str
+            ).in_('date_toronto', [today_str, yesterday_str]).execute()
             
             logger.debug(f"OpenAI usage query result for {user_id}: {len(openai_result.data)} records")
             
@@ -346,9 +349,9 @@ class DailyRateLimiter:
             # Convert user limits to expected format
             for row in user_result.data:
                 stats['limits'][row['limit_type']] = {
-                    'current_count': row['current_count'],
-                    'daily_limit': row['daily_limit'],
-                    'last_reset': row['last_reset_date']
+                    'current_count': row['request_count'],  # Note: column name is request_count in schema
+                    'daily_limit': self.config.user_rag_requests if row['limit_type'] == 'rag_requests' else self.config.user_file_uploads,
+                    'last_reset': row['date_toronto']
                 }
             
             logger.debug(f"User stats compiled successfully for {user_id}")

@@ -3,6 +3,9 @@ from typing import Optional
 import discord
 from discord import app_commands
 from discord.ext import commands
+import boto3
+import uuid
+from datetime import datetime
 from tenant_context import load_tenant_context_async
 from utils.channel_discovery import has_feature_access
 from settings import settings
@@ -66,6 +69,58 @@ def has_admin_access(member) -> bool:
     has_access = admin_role_id in user_role_ids
     logger.debug(f"User {getattr(member, 'id', 'unknown')} has admin access: {has_access}")
     return has_access
+
+# ──────────────────────────────────────────────
+# S3 Upload Helper Function
+# ──────────────────────────────────────────────
+async def upload_file_to_s3(file_content: bytes, filename: str, user_id: str) -> tuple[bool, str]:
+    """
+    Upload file to S3 bucket for processing by Lambda function.
+    
+    Args:
+        file_content: File content as bytes
+        filename: Original filename
+        user_id: Discord user ID for tracking
+        
+    Returns:
+        tuple: (success: bool, message: str)
+    """
+    try:
+        # Create S3 client
+        s3_client = boto3.client(
+            's3',
+            aws_access_key_id=settings.aws_access_key_id,
+            aws_secret_access_key=settings.aws_secret_access_key,
+            region_name=settings.aws_region_name
+        )
+        
+        # Generate unique filename with timestamp and UUID
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        file_extension = filename.split('.')[-1] if '.' in filename else 'pdf'
+        unique_filename = f"{timestamp}_{user_id}_{uuid.uuid4().hex[:8]}.{file_extension}"
+        
+        # S3 key in the raw_docs/ prefix
+        s3_key = f"raw_docs/{unique_filename}"
+        
+        # Upload to S3
+        s3_client.put_object(
+            Bucket='mma8-discord-project',
+            Key=s3_key,
+            Body=file_content,
+            ContentType='application/pdf' if file_extension.lower() == 'pdf' else 'application/octet-stream',
+            Metadata={
+                'original_filename': filename,
+                'uploaded_by': user_id,
+                'upload_timestamp': timestamp
+            }
+        )
+        
+        logger.info(f"Successfully uploaded {filename} to s3://mma8-discord-project/{s3_key}")
+        return True, f"File uploaded successfully to S3 as `{unique_filename}`. Lambda processing will begin automatically."
+        
+    except Exception as e:
+        logger.error(f"Failed to upload {filename} to S3: {e}")
+        return False, f"Failed to upload file to S3: {str(e)}"
 
 # ──────────────────────────────────────────────
 # Discord client setup
@@ -419,29 +474,64 @@ async def jarvis_upload(inter: discord.Interaction, file: discord.Attachment):
         # File validation passed - increment counter
         new_count = await validator.increment_upload_count()
         
-        # Here you would typically process the file (add to RAG index, etc.)
-        # For now, just confirm successful upload
-        embed = discord.Embed(
-            title="✅ Upload Successful",
-            description=result.message,
-            color=discord.Color.green()
+        # Upload file to S3 for Lambda processing
+        upload_success, upload_message = await upload_file_to_s3(
+            file_content=file_content,
+            filename=file.filename,
+            user_id=str(inter.user.id)
         )
-        embed.add_field(
-            name="Server Usage", 
-            value=f"{new_count}/{result.daily_limit} files today",
-            inline=True
-        )
-        if result.pdf_pages:
+        
+        if upload_success:
+            # S3 upload successful
+            embed = discord.Embed(
+                title="✅ Upload Successful",
+                description=upload_message,
+                color=discord.Color.green()
+            )
             embed.add_field(
-                name="PDF Pages", 
-                value=f"{result.pdf_pages} pages",
+                name="Server Usage", 
+                value=f"{new_count}/{result.daily_limit} files today",
                 inline=True
             )
-        embed.add_field(
-            name="File Size", 
-            value=f"{result.file_size_mb:.2f} MB",
-            inline=True
-        )
+            if result.pdf_pages:
+                embed.add_field(
+                    name="PDF Pages", 
+                    value=f"{result.pdf_pages} pages",
+                    inline=True
+                )
+            embed.add_field(
+                name="File Size", 
+                value=f"{result.file_size_mb:.2f} MB",
+                inline=True
+            )
+            embed.add_field(
+                name="🚀 Next Steps",
+                value="Your document is being processed by our Lambda function. It will be available for queries once processing completes (usually within 1-2 minutes).",
+                inline=False
+            )
+        else:
+            # S3 upload failed
+            embed = discord.Embed(
+                title="❌ Upload Failed",
+                description=f"File validation passed, but upload to S3 failed: {upload_message}",
+                color=discord.Color.red()
+            )
+            embed.add_field(
+                name="Server Usage", 
+                value=f"{new_count}/{result.daily_limit} files today",
+                inline=True
+            )
+            if result.pdf_pages:
+                embed.add_field(
+                    name="PDF Pages", 
+                    value=f"{result.pdf_pages} pages",
+                    inline=True
+                )
+            embed.add_field(
+                name="File Size", 
+                value=f"{result.file_size_mb:.2f} MB",
+                inline=True
+            )
         
         await send_answer(inter, embed)
         
@@ -472,7 +562,6 @@ async def jarvis_stats(inter: discord.Interaction):
         
         # Get user stats
         user_stats = await rate_limiter.get_user_stats(str(inter.user.id))
-        logger.debug(f"User stats result: {user_stats}")
         
         # Check if there was an error in user stats
         if 'error' in user_stats:
@@ -486,7 +575,6 @@ async def jarvis_stats(inter: discord.Interaction):
             return
         
         upload_stats = await validator.get_upload_stats()
-        logger.debug(f"Upload stats result: {upload_stats}")
         
         embed = discord.Embed(
             title="📊 Your Usage Statistics",

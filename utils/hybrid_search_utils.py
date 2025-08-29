@@ -44,7 +44,6 @@ def hybrid_search_relative_band(
 
     # 3 — compute adaptive cut-off
     best   = matches[0]["score"]
-    logger.debug(f"Best score: {best}")
     cutoff = best * REL_KEEP
 
     # 4 — keep everything above cut-off until we reach k docs
@@ -52,7 +51,6 @@ def hybrid_search_relative_band(
     for m in matches:
         if m["score"] < MIN_SCORE:
             continue
-        logger.debug(f"Match: {m['metadata'].get('text', '')} (score: {m['score']})")
         if m["score"] < cutoff or len(docs) >= k:
             break                      # sorted → safe early stop
         text = m["metadata"].get("text") or m["metadata"].get("context", "")

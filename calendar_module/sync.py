@@ -3,7 +3,7 @@
 import pytz
 import datetime as dt
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Union, Any
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -29,7 +29,7 @@ TOKEN_PATH = BASE / "token.json"
 FUTURE_HORIZON = 30    # days ahead if date_to is None
 
 # Google Auth Helper
-async def get_creds() -> Credentials:
+async def get_creds() -> Any:
     """
     Obtain or refresh Google OAuth credentials, saving token.json locally.
     """
@@ -125,7 +125,6 @@ async def fetch_google(
                 break
 
             for ev in resp.get("items", []):
-                print(ev) # debug
                 start_iso = ev["start"].get("dateTime") or ev["start"].get("date")
                 end_iso = ev["end"].get("dateTime")   or ev["end"].get("date")
                 loc = ev.get("location")
@@ -196,8 +195,8 @@ async def fetch_google(
                     metadata={
                         "id":       tid,
                         "type":     "task",
-                        "start_dt": start_dt.isoformat() if due_iso else None,
-                        "end_dt":   end_dt.isoformat()   if due_iso else None,
+                        "start_dt": start_dt.isoformat() if start_dt else None,
+                        "end_dt":   end_dt.isoformat() if end_dt else None,
                         "start_ts": due_ts,
                         "end_ts":   due_ts,
                     }
@@ -232,15 +231,20 @@ async def ensure_synced(
         if first is None and last is None:
             # first sync ever
             slices.append((start, end))
-        elif start < first:
+        elif first is not None and start < first:
             slices.append((start, first))
-        elif end > last:
+        elif last is not None and end > last:
             slices.append((last, end))
 
         if not slices:
             continue                            # nothing to fetch
 
-        store = get_vector_store(context.get("index_calendar"))
+        index_name = context.get("index_calendar")
+        if not index_name:
+            logger.error("No index_calendar specified in context")
+            continue
+            
+        store = get_vector_store(index_name)
 
         for s, e in slices:
             docs = await fetch_google(

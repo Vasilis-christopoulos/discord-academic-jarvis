@@ -1,56 +1,63 @@
--- Update schema to use text for user_id instead of bigint
--- Discord user IDs can be larger than bigint range
+-- Final Rate Limiting Schema with Correct Timezone Handling
+-- This schema includes the working timezone fix that was successfully applied
+-- Use this for fresh database setups or complete resets
 
--- Drop existing functions
+-- Drop existing functions and tables
 DROP FUNCTION IF EXISTS check_user_limit(TEXT, TEXT);
 DROP FUNCTION IF EXISTS increment_user_count(TEXT, TEXT);
 DROP FUNCTION IF EXISTS check_global_limit(TEXT);
 DROP FUNCTION IF EXISTS increment_global_count(TEXT);
 DROP FUNCTION IF EXISTS track_openai_usage(TEXT, INTEGER, DECIMAL, TEXT);
 DROP FUNCTION IF EXISTS reset_toronto_limits();
+DROP FUNCTION IF EXISTS get_toronto_date();
 
--- Drop and recreate tables with text user_id
 DROP TABLE IF EXISTS openai_usage_tracking;
 DROP TABLE IF EXISTS rate_limits;
 DROP TABLE IF EXISTS global_limits;
 
--- User rate limits table (text user_id for Discord compatibility)
+-- Create tables with TEXT user_id for Discord compatibility
 CREATE TABLE rate_limits (
     id SERIAL PRIMARY KEY,
     user_id TEXT NOT NULL,
-    limit_type TEXT NOT NULL, -- 'rag_requests', 'file_uploads', etc.
+    limit_type TEXT NOT NULL, -- 'rag', 'file_uploads', etc.
     request_count INTEGER NOT NULL DEFAULT 0,
-    date_toronto DATE NOT NULL DEFAULT (CURRENT_DATE AT TIME ZONE 'America/Toronto'),
+    date_toronto DATE NOT NULL,
     last_updated TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE(user_id, limit_type, date_toronto)
 );
 
--- Global rate limits table (server-wide limits)
 CREATE TABLE global_limits (
     id SERIAL PRIMARY KEY,
-    limit_type TEXT NOT NULL, -- 'total_file_uploads', etc.
+    limit_type TEXT NOT NULL, -- 'files', etc.
     request_count INTEGER NOT NULL DEFAULT 0,
-    date_toronto DATE NOT NULL DEFAULT (CURRENT_DATE AT TIME ZONE 'America/Toronto'),
+    date_toronto DATE NOT NULL,
     last_updated TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE(limit_type, date_toronto)
 );
 
--- OpenAI usage tracking table (text user_id)
 CREATE TABLE openai_usage_tracking (
     id SERIAL PRIMARY KEY,
     user_id TEXT NOT NULL,
     tokens_used INTEGER NOT NULL,
     cost DECIMAL(10, 6) NOT NULL,
     model TEXT NOT NULL,
-    date_toronto DATE NOT NULL DEFAULT (CURRENT_DATE AT TIME ZONE 'America/Toronto'),
-    timestamp_toronto TIMESTAMPTZ NOT NULL DEFAULT (NOW() AT TIME ZONE 'America/Toronto'),
+    date_toronto DATE NOT NULL,
+    timestamp_toronto TIMESTAMPTZ NOT NULL,
     INDEX(user_id, date_toronto)
 );
 
--- Indexes for performance
+-- Create indexes for performance
 CREATE INDEX idx_rate_limits_user_type_date ON rate_limits(user_id, limit_type, date_toronto);
 CREATE INDEX idx_global_limits_type_date ON global_limits(limit_type, date_toronto);
 CREATE INDEX idx_openai_usage_user_date ON openai_usage_tracking(user_id, date_toronto);
+
+-- Helper function to get current date in Toronto timezone (WORKING VERSION)
+CREATE OR REPLACE FUNCTION get_toronto_date() RETURNS DATE AS $$
+BEGIN
+    -- Use the simple, reliable method that works correctly
+    RETURN (NOW() AT TIME ZONE 'America/Toronto')::DATE;
+END;
+$$ LANGUAGE plpgsql;
 
 -- Function to check user rate limit
 CREATE OR REPLACE FUNCTION check_user_limit(
@@ -61,7 +68,7 @@ CREATE OR REPLACE FUNCTION check_user_limit(
     is_within_limit BOOLEAN
 ) AS $$
 DECLARE
-    toronto_date DATE := CURRENT_DATE AT TIME ZONE 'America/Toronto';
+    toronto_date DATE := get_toronto_date();
     count_val INTEGER := 0;
 BEGIN
     -- Get current count for user and limit type for today (Toronto time)
@@ -82,7 +89,7 @@ CREATE OR REPLACE FUNCTION increment_user_count(
     p_limit_type TEXT
 ) RETURNS INTEGER AS $$
 DECLARE
-    toronto_date DATE := CURRENT_DATE AT TIME ZONE 'America/Toronto';
+    toronto_date DATE := get_toronto_date();
     new_count INTEGER;
 BEGIN
     -- Insert or update user rate limit record
@@ -106,7 +113,7 @@ CREATE OR REPLACE FUNCTION check_global_limit(
     is_within_limit BOOLEAN
 ) AS $$
 DECLARE
-    toronto_date DATE := CURRENT_DATE AT TIME ZONE 'America/Toronto';
+    toronto_date DATE := get_toronto_date();
     count_val INTEGER := 0;
 BEGIN
     -- Get current count for global limit type for today (Toronto time)
@@ -125,7 +132,7 @@ CREATE OR REPLACE FUNCTION increment_global_count(
     p_limit_type TEXT
 ) RETURNS INTEGER AS $$
 DECLARE
-    toronto_date DATE := CURRENT_DATE AT TIME ZONE 'America/Toronto';
+    toronto_date DATE := get_toronto_date();
     new_count INTEGER;
 BEGIN
     -- Insert or update global rate limit record
@@ -149,21 +156,20 @@ CREATE OR REPLACE FUNCTION track_openai_usage(
     p_model TEXT
 ) RETURNS BOOLEAN AS $$
 DECLARE
-    toronto_date DATE := CURRENT_DATE AT TIME ZONE 'America/Toronto';
-    toronto_timestamp TIMESTAMPTZ := NOW() AT TIME ZONE 'America/Toronto';
+    toronto_date DATE := get_toronto_date();
 BEGIN
     -- Insert OpenAI usage record
     INSERT INTO openai_usage_tracking (user_id, tokens_used, cost, model, date_toronto, timestamp_toronto)
-    VALUES (p_user_id, p_tokens_used, p_cost, p_model, toronto_date, toronto_timestamp);
+    VALUES (p_user_id, p_tokens_used, p_cost, p_model, toronto_date, NOW() AT TIME ZONE 'America/Toronto');
     
     RETURN TRUE;
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to reset rate limits (for daily cleanup at midnight Toronto time)
+-- Function to reset rate limits (for daily cleanup)
 CREATE OR REPLACE FUNCTION reset_toronto_limits() RETURNS BOOLEAN AS $$
 DECLARE
-    toronto_date DATE := CURRENT_DATE AT TIME ZONE 'America/Toronto';
+    toronto_date DATE := get_toronto_date();
     deleted_user_count INTEGER;
     deleted_global_count INTEGER;
     deleted_openai_count INTEGER;
@@ -188,7 +194,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Grant permissions (adjust role name as needed)
+-- Test that everything works
+SELECT 
+    'Schema deployment test:' as test,
+    get_toronto_date() as toronto_date,
+    CURRENT_DATE as server_date;
+
+-- Grant permissions (adjust role name as needed for your Supabase setup)
 GRANT SELECT, INSERT, UPDATE, DELETE ON rate_limits TO postgres;
 GRANT SELECT, INSERT, UPDATE, DELETE ON global_limits TO postgres;
 GRANT SELECT, INSERT, UPDATE, DELETE ON openai_usage_tracking TO postgres;
