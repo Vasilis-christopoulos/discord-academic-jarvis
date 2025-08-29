@@ -294,5 +294,3 @@ async def delta_sync_tasks(context: dict):
     set_tasks_last_updated(now_iso)
 
 
-
-

@@ -26,7 +26,6 @@ def get_first_last(sync_type: str) -> Tuple[Optional[dt.datetime], Optional[dt.d
     """
     try:
         supabase = get_supabase_client()
-        
         response = (
             supabase.table("sync_state")
             .select("first_synced,last_synced")

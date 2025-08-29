@@ -1,7 +1,8 @@
+from typing import Optional
 from supabase import create_client
 from pinecone import Pinecone
 
-from settings import settings
+from settings import settings, TENANT_CONFIGS
 
 MODULE       = "calendar"
 INITIAL_ISO  = None
@@ -41,21 +42,32 @@ def reset_watermarks():
             {"tasks_last_updated": None}
         ).eq("module", MODULE).eq("type", "task").execute()
         
-        print("✅ watermarks and sync tokens reset")
+        print("✅ watermarks reset")
     except Exception as e:
         print(f"❌ Error resetting watermarks: {e}")
 
-def reset_pinecone():
+def reset_pinecone(index_name: Optional[str] = None):
     """
     Clear all calendar data from the Pinecone vector database.
     
     This function deletes all vectors from the calendar Pinecone index,
     effectively removing all stored calendar events and tasks from the
     vector database. Use with caution as this operation cannot be undone.
+    
+    Args:
+        index_name: Optional index name to use. If not provided, uses first tenant's calendar index.
     """
     try:
-        # Use the default calendar index name from tenant config
-        calendar_index = "calendar-hybrid"  # Default calendar index
+        calendar_index = index_name
+        if not calendar_index:
+            # Check if settings has pinecone_calendar_index attribute (for tests)
+            calendar_index = getattr(settings, 'pinecone_calendar_index', None)
+            if not calendar_index:
+                # Use the first tenant's calendar index, or default if no tenants
+                calendar_index = "calendar-hybrid"  # Default
+                if TENANT_CONFIGS and len(TENANT_CONFIGS) > 0:
+                    calendar_index = TENANT_CONFIGS[0].index_calendar
+            
         idx = pc.Index(calendar_index)
         stats = idx.describe_index_stats()
         if stats["total_vector_count"]:

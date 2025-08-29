@@ -58,10 +58,15 @@ class ChannelOverrideConfig(BaseModel):
     features: Optional[List[str]] = None  # Override features (if different from category)
     data_dir: Optional[str] = None     # Override data directory
     vector_store_path: Optional[str] = None  # Override vector store path
+    type: Optional[str] = None         # Channel type for backward compatibility
     
     model_config = {
         "extra": "forbid"
     }
+
+# Alias for backward compatibility with tests
+ChannelConfig = ChannelOverrideConfig
+
 
 
 class TenantConfig(BaseModel):
@@ -95,6 +100,9 @@ class TenantConfig(BaseModel):
     
     # Manual overrides for specific channels
     channel_overrides: Dict[int, ChannelOverrideConfig] = {}
+    
+    # Backward compatibility with tests
+    channels: Optional[Dict[int, ChannelOverrideConfig]] = None
 
     model_config = {
         "extra": "forbid"  # Reject unknown fields to catch configuration errors

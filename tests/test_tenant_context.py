@@ -42,5 +42,5 @@ def test_channel_context(tmp_path: Path, channel_id: int, expected_type: str, ex
     ctx = tenant_context.load_tenant_context(111, channel_id)
     assert ctx is not None, f"Context should not be None for channel {channel_id}"
     assert ctx["type"] == expected_type
-    assert ctx["name"] == expected_ctx
+    assert ctx["channel_name"] == expected_ctx  # Check channel_name instead of name
     assert Path(ctx["data_dir"]).exists()

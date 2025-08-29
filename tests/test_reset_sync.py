@@ -20,16 +20,17 @@ class TestResetWatermarks:
         # Execute
         reset_watermarks()
         
-        # Verify supabase calls
-        assert mock_supabase.table.call_count == 2  # Once for each type
+        # Verify supabase calls (4 total: 2 sync timestamps + 1 calendar token + 1 tasks timestamp)
+        assert mock_supabase.table.call_count == 4
         mock_supabase.table.assert_any_call("sync_state")
         
-        # Verify update calls for both event and task types
+        # Verify update calls for event sync, task sync, calendar token, and tasks timestamp
         update_calls = mock_table.update.call_args_list
-        assert len(update_calls) == 2
+        assert len(update_calls) == 4
         
-        # Check that both calls use INITIAL_ISO (None)
-        for call in update_calls:
+        # Check that the first two calls reset sync timestamps
+        sync_calls = update_calls[:2]
+        for call in sync_calls:
             args, kwargs = call
             update_data = args[0]
             assert update_data["first_synced"] == INITIAL_ISO
@@ -53,15 +54,15 @@ class TestResetWatermarks:
         # Should have 4 eq calls total (2 for each type: module filter + type filter)
         assert len(eq_calls) >= 4
         
-        # Check module filtering
+        # Check module filtering (4 calls for all operations)
         module_calls = [call for call in eq_calls if call[0][0] == "module"]
-        assert len(module_calls) == 2
+        assert len(module_calls) == 4
         for call in module_calls:
             assert call[0][1] == MODULE  # "calendar"
         
-        # Check type filtering
+        # Check type filtering (4 calls: 2 event + 2 task)
         type_calls = [call for call in eq_calls if call[0][0] == "type"]
-        assert len(type_calls) == 2
+        assert len(type_calls) == 4
         type_values = [call[0][1] for call in type_calls]
         assert "event" in type_values
         assert "task" in type_values
@@ -248,7 +249,7 @@ class TestResetSyncIntegration:
         reset_pinecone()
         
         # Verify complete flow
-        assert mock_supabase.table.call_count == 2  # For both event and task types
+        assert mock_supabase.table.call_count == 4  # For sync timestamps, calendar token, and tasks timestamp
         mock_pc.Index.assert_called_once_with("test_index")
         mock_index.delete.assert_called_once_with(delete_all=True)
         

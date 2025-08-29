@@ -468,8 +468,8 @@ class TestDeltaSyncCalendarErrorHandling:
             await delta_sync_calendar(mock_context)
             
             # Verify that the sync token was reset and function was called recursively
-            # Should be called twice: first to reset (""), then to set new token ("new_token")
-            expected_calls = [call(""), call("new_token")]
+            # Should be called twice: first to reset (None), then to set new token ("new_token")
+            expected_calls = [call(None), call("new_token")]
             mock_set_token.assert_has_calls(expected_calls)
             # Should have been called twice: once with expired token (fails), once with empty token (succeeds)
             assert mock_events.list.return_value.execute.call_count == 2

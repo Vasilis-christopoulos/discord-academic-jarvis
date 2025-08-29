@@ -291,5 +291,3 @@ class VisionCaptioner:
         img.save(buf, format="PNG", optimize=True)
         b64 = base64.b64encode(buf.getvalue()).decode("ascii")
         return f"data:image/png;base64,{b64}"
-
-

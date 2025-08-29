@@ -17,7 +17,7 @@ from calendar_module.sync_store import (
 @pytest.fixture
 def mock_supabase_client():
     """Mock Supabase client for testing."""
-    with patch('calendar_module.sync_store.supabase') as mock_client:
+    with patch('calendar_module.sync_store.get_supabase_client') as mock_client:
         yield mock_client
 
 
@@ -39,7 +39,11 @@ class TestGetFirstLast:
         
         mock_table = Mock()
         mock_table.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.return_value = mock_response
-        mock_supabase_client.table.return_value = mock_table
+        
+        # Mock the get_supabase_client to return a client that has table method
+        mock_client = Mock()
+        mock_client.table.return_value = mock_table
+        mock_supabase_client.return_value = mock_client
         
         # Execute
         first, last = get_first_last("event")
@@ -51,7 +55,8 @@ class TestGetFirstLast:
         assert isinstance(last, dt.datetime)
         
         # Verify Supabase query
-        mock_supabase_client.table.assert_called_once_with("sync_state")
+        mock_supabase_client.assert_called_once()
+        mock_client.table.assert_called_once_with("sync_state")
         mock_table.select.assert_called_once_with("first_synced,last_synced")
 
     def test_get_first_last_null_values(self, mock_supabase_client):
@@ -65,7 +70,7 @@ class TestGetFirstLast:
         
         mock_table = Mock()
         mock_table.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.return_value = mock_response
-        mock_supabase_client.table.return_value = mock_table
+        mock_client = Mock(); mock_client.table.return_value = mock_table; mock_supabase_client.return_value = mock_client
         
         # Execute
         first, last = get_first_last("task")
@@ -79,7 +84,7 @@ class TestGetFirstLast:
         # Mock exception during query
         mock_table = Mock()
         mock_table.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.side_effect = Exception("Database error")
-        mock_supabase_client.table.return_value = mock_table
+        mock_client = Mock(); mock_client.table.return_value = mock_table; mock_supabase_client.return_value = mock_client
         
         # Execute - should not raise exception
         first, last = get_first_last("event")
@@ -96,13 +101,13 @@ class TestSetFirstLast:
         last_dt = sample_timezone.localize(dt.datetime(2025, 5, 29, 23, 59, 59))
         
         mock_table = Mock()
-        mock_supabase_client.table.return_value = mock_table
+        mock_client = Mock(); mock_client.table.return_value = mock_table; mock_supabase_client.return_value = mock_client
         
         # Execute
         set_first_last("event", first_dt, last_dt)
         
         # Verify Supabase update call
-        mock_supabase_client.table.assert_called_once_with("sync_state")
+        mock_client.table.assert_called_once_with("sync_state")
         mock_table.update.assert_called_once_with({
             "first_synced": first_dt.isoformat(),
             "last_synced": last_dt.isoformat()
@@ -115,7 +120,7 @@ class TestSetFirstLast:
         
         mock_table = Mock()
         mock_table.update.return_value.eq.return_value.eq.return_value.execute.side_effect = Exception("Database error")
-        mock_supabase_client.table.return_value = mock_table
+        mock_client = Mock(); mock_client.table.return_value = mock_table; mock_supabase_client.return_value = mock_client
         
         # Should not raise exception
         set_first_last("task", first_dt, last_dt)
@@ -129,7 +134,7 @@ class TestCalendarSyncToken:
         
         mock_table = Mock()
         mock_table.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.return_value = mock_response
-        mock_supabase_client.table.return_value = mock_table
+        mock_client = Mock(); mock_client.table.return_value = mock_table; mock_supabase_client.return_value = mock_client
         
         # Execute
         token = get_calendar_sync_token()
@@ -138,7 +143,7 @@ class TestCalendarSyncToken:
         assert token == "test_sync_token_123"
         
         # Verify Supabase query
-        mock_supabase_client.table.assert_called_once_with("sync_state")
+        mock_client.table.assert_called_once_with("sync_state")
         mock_table.select.assert_called_once_with("calendar_sync_token")
 
     def test_get_calendar_sync_token_null(self, mock_supabase_client):
@@ -148,7 +153,7 @@ class TestCalendarSyncToken:
         
         mock_table = Mock()
         mock_table.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.return_value = mock_response
-        mock_supabase_client.table.return_value = mock_table
+        mock_client = Mock(); mock_client.table.return_value = mock_table; mock_supabase_client.return_value = mock_client
         
         # Execute
         token = get_calendar_sync_token()
@@ -160,7 +165,7 @@ class TestCalendarSyncToken:
         """Test exception handling in get_calendar_sync_token."""
         mock_table = Mock()
         mock_table.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.side_effect = Exception("Database error")
-        mock_supabase_client.table.return_value = mock_table
+        mock_client = Mock(); mock_client.table.return_value = mock_table; mock_supabase_client.return_value = mock_client
         
         # Execute
         token = get_calendar_sync_token()
@@ -173,20 +178,20 @@ class TestCalendarSyncToken:
         test_token = "new_sync_token_456"
         
         mock_table = Mock()
-        mock_supabase_client.table.return_value = mock_table
+        mock_client = Mock(); mock_client.table.return_value = mock_table; mock_supabase_client.return_value = mock_client
         
         # Execute
         set_calendar_sync_token(test_token)
         
         # Verify Supabase update call
-        mock_supabase_client.table.assert_called_once_with("sync_state")
+        mock_client.table.assert_called_once_with("sync_state")
         mock_table.update.assert_called_once_with({"calendar_sync_token": test_token})
 
     def test_set_calendar_sync_token_exception(self, mock_supabase_client):
         """Test exception handling in set_calendar_sync_token."""
         mock_table = Mock()
         mock_table.update.return_value.eq.return_value.eq.return_value.execute.side_effect = Exception("Database error")
-        mock_supabase_client.table.return_value = mock_table
+        mock_client = Mock(); mock_client.table.return_value = mock_table; mock_supabase_client.return_value = mock_client
         
         # Should not raise exception
         set_calendar_sync_token("test_token")
@@ -200,7 +205,7 @@ class TestTasksLastUpdated:
         
         mock_table = Mock()
         mock_table.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.return_value = mock_response
-        mock_supabase_client.table.return_value = mock_table
+        mock_client = Mock(); mock_client.table.return_value = mock_table; mock_supabase_client.return_value = mock_client
         
         # Execute
         timestamp = get_tasks_last_updated()
@@ -209,7 +214,7 @@ class TestTasksLastUpdated:
         assert timestamp == "2025-05-29T12:00:00Z"
         
         # Verify Supabase query
-        mock_supabase_client.table.assert_called_once_with("sync_state")
+        mock_client.table.assert_called_once_with("sync_state")
         mock_table.select.assert_called_once_with("tasks_last_updated")
 
     def test_get_tasks_last_updated_null(self, mock_supabase_client):
@@ -219,7 +224,7 @@ class TestTasksLastUpdated:
         
         mock_table = Mock()
         mock_table.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.return_value = mock_response
-        mock_supabase_client.table.return_value = mock_table
+        mock_client = Mock(); mock_client.table.return_value = mock_table; mock_supabase_client.return_value = mock_client
         
         # Execute
         timestamp = get_tasks_last_updated()
@@ -231,7 +236,7 @@ class TestTasksLastUpdated:
         """Test exception handling in get_tasks_last_updated."""
         mock_table = Mock()
         mock_table.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.side_effect = Exception("Database error")
-        mock_supabase_client.table.return_value = mock_table
+        mock_client = Mock(); mock_client.table.return_value = mock_table; mock_supabase_client.return_value = mock_client
         
         # Execute
         timestamp = get_tasks_last_updated()
@@ -244,20 +249,20 @@ class TestTasksLastUpdated:
         test_timestamp = "2025-05-29T15:30:00Z"
         
         mock_table = Mock()
-        mock_supabase_client.table.return_value = mock_table
+        mock_client = Mock(); mock_client.table.return_value = mock_table; mock_supabase_client.return_value = mock_client
         
         # Execute
         set_tasks_last_updated(test_timestamp)
         
         # Verify Supabase update call
-        mock_supabase_client.table.assert_called_once_with("sync_state")
+        mock_client.table.assert_called_once_with("sync_state")
         mock_table.update.assert_called_once_with({"tasks_last_updated": test_timestamp})
 
     def test_set_tasks_last_updated_exception(self, mock_supabase_client):
         """Test exception handling in set_tasks_last_updated."""
         mock_table = Mock()
         mock_table.update.return_value.eq.return_value.eq.return_value.execute.side_effect = Exception("Database error")
-        mock_supabase_client.table.return_value = mock_table
+        mock_client = Mock(); mock_client.table.return_value = mock_table; mock_supabase_client.return_value = mock_client
         
         # Should not raise exception
         set_tasks_last_updated("2025-05-29T15:30:00Z")
@@ -272,7 +277,7 @@ class TestSyncStoreIntegration:
     def test_query_filtering(self, mock_supabase_client):
         """Test that database queries filter by module and type correctly."""
         mock_table = Mock()
-        mock_supabase_client.table.return_value = mock_table
+        mock_client = Mock(); mock_client.table.return_value = mock_table; mock_supabase_client.return_value = mock_client
         
         # Test event type filtering
         get_first_last("event")
@@ -287,7 +292,7 @@ class TestSyncStoreIntegration:
         test_dt = sample_timezone.localize(dt.datetime(2025, 5, 29, 14, 30, 45))
         
         mock_table = Mock()
-        mock_supabase_client.table.return_value = mock_table
+        mock_client = Mock(); mock_client.table.return_value = mock_table; mock_supabase_client.return_value = mock_client
         
         # Execute
         set_first_last("event", test_dt, test_dt)
@@ -304,7 +309,7 @@ class TestSyncStoreIntegration:
         """Test that errors are properly logged."""
         mock_table = Mock()
         mock_table.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.side_effect = Exception("Test error")
-        mock_supabase_client.table.return_value = mock_table
+        mock_client = Mock(); mock_client.table.return_value = mock_table; mock_supabase_client.return_value = mock_client
         
         # Execute function that should log error
         get_first_last("event")
