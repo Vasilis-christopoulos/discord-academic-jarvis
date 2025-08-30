@@ -18,10 +18,7 @@ EMBED_MODEL = "text-embedding-3-large"
 EMBED_DIM = 3072
 
 class LambdaCompatibleVectorStore:
-    """
-    Lambda-compatible vector store that bypasses LangChain's 
-    multiprocessing issues by using Pinecone SDK directly.
-    """
+    """Lambda-compatible vector store using Pinecone SDK directly."""
     
     def __init__(self, index_name: str):
         self.pc = Pinecone(
@@ -42,21 +39,14 @@ class LambdaCompatibleVectorStore:
         self.embeddings = OpenAIEmbeddings(model=EMBED_MODEL)
     
     def add_documents(self, documents: List[Document]) -> List[str]:
-        """
-        Add documents using direct Pinecone SDK for better Lambda compatibility.
-        Returns list of document IDs.
-        """
+        """Add documents using direct Pinecone SDK for Lambda compatibility."""
         if not documents:
             return []
         
-        # Extract texts and metadata
         texts = [doc.page_content for doc in documents]
         metadatas = [doc.metadata for doc in documents]
-        
-        # Generate embeddings
         embeddings = self.embeddings.embed_documents(texts)
         
-        # Prepare vectors for Pinecone
         vectors = []
         doc_ids = []
         
@@ -64,7 +54,6 @@ class LambdaCompatibleVectorStore:
             doc_id = f"doc_{hash(text)}_{i}"
             doc_ids.append(doc_id)
             
-            # Add text to metadata (required for retrieval)
             metadata_with_text = {**metadata, "text": text}
             
             vectors.append({
@@ -73,8 +62,8 @@ class LambdaCompatibleVectorStore:
                 "metadata": metadata_with_text
             })
         
-        # Batch upsert - much more efficient than individual operations
-        batch_size = 100  # Pinecone's recommended batch size
+        # Batch upsert
+        batch_size = 100
         for i in range(0, len(vectors), batch_size):
             batch = vectors[i:i + batch_size]
             self.index.upsert(vectors=batch)
@@ -83,10 +72,7 @@ class LambdaCompatibleVectorStore:
 
 
 def get_vector_store(index_name: str) -> LambdaCompatibleVectorStore:
-    """
-    Return a Lambda-compatible vector store that doesn't use multiprocessing.
-    Much faster than the monkey-patched version.
-    """
+    """Return a Lambda-compatible vector store."""
     return LambdaCompatibleVectorStore(index_name)
 
 

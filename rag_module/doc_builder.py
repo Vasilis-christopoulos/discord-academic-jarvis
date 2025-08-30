@@ -139,10 +139,8 @@ class DocBuilder:
                 page_content.markdown_content, page_asset_captions
             )
             
-            # Create citation anchor for this page
             citation_anchor = f"{document_name}#page-{page_content.page_number}"
             
-            # Base metadata for this page
             base_metadata = {
                 "source": pdoc.s3_key,
                 "filename": document_name,
@@ -151,7 +149,6 @@ class DocBuilder:
                 "page_count": pdoc.metadata.get("page_count", 0),
                 "asset_count": len(page_content.assets),
                 "processing_method": "docling_page_based",
-                # Add S3 URL metadata for preview links
                 "s3_bucket": pdoc.metadata.get("s3_bucket"),
                 "s3_key": pdoc.metadata.get("s3_key"),
                 "s3_url": pdoc.metadata.get("s3_url"),
@@ -176,7 +173,6 @@ class DocBuilder:
                     "chunks_in_page": len(chunks),
                 }
                 
-                # For multi-chunk pages, add chunk suffix to citation
                 if len(chunks) > 1:
                     chunk_metadata["citation_anchor"] = f"{citation_anchor}-chunk-{chunk_index + 1}"
                 

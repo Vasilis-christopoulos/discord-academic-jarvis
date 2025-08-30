@@ -1,25 +1,6 @@
 """
-lambda_entrypoint.py
-────────────────────
-AWS Lambda handler for “ObjectCreated” S3 events.
-Process ONE or more newly-uploaded PDFs and push them to the
-tenant’s Pinecone index.
-
-Assumptions
------------
-• Every tenant in tenants.json defines:
-      s3_bucket
-      s3_raw_docs_prefix   (unique within the bucket)
-      index_rag
-• The triggering S3 object’s bucket *and* key prefix uniquely
-  identify which tenant owns the file.
-• Only PDFs are ingested. Non-PDF uploads are ignored.
-
-Environment variables
----------------------
-OPENAI_API_KEY      – required by VisionCaptioner
-PINECONE_API_KEY    – used in utils.vector_store.get_vector_store
-AWS_REGION          – defaults to "ca-central-1"
+AWS Lambda handler for S3 ObjectCreated events.
+Processes uploaded PDFs and stores them in Pinecone with S3 URL metadata.
 """
 
 from __future__ import annotations
@@ -56,13 +37,12 @@ except ImportError:
     BOTO3_AVAILABLE = False
     logger.warning("boto3 not available - CloudWatch metrics disabled")
 
-# Configuration constants for reliability
-MAX_FILE_SIZE_MB = 100  # Maximum file size to process
-MAX_MEMORY_USAGE_PERCENT = 85  # Alert when memory usage exceeds this
-MIN_TIME_REMAINING_MS = 120000  # Minimum time needed to process a document (2 minutes)
-MEMORY_CHECK_INTERVAL = 5  # Seconds between memory checks during processing
+# Configuration constants
+MAX_FILE_SIZE_MB = 100
+MAX_MEMORY_USAGE_PERCENT = 85
+MIN_TIME_REMAINING_MS = 120000
+MEMORY_CHECK_INTERVAL = 5
 
-# Memory monitoring class
 class MemoryMonitor:
     """Monitor memory usage and provide alerts."""
     

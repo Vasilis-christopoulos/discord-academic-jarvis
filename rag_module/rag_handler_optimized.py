@@ -47,7 +47,6 @@ class OptimizedRAGHandler:
         self.connection_manager = get_connection_manager()
         
         # Clear context cache to ensure fresh citations
-        logger.info("Clearing context cache to ensure fresh citation formatting")
         self.cache_manager.context_cache.clear()
         
         # Initialize rate limiter
@@ -343,16 +342,10 @@ Answer:"""
         
         context_parts = []
         for i, doc in enumerate(documents, 1):
-            # Extract metadata for citation
             metadata = doc.metadata
-            
-            # Try to build a proper citation from metadata
             citation = self._build_citation(metadata, i)
-            
-            # Format document content
             content = doc.page_content.strip()
             if content:
-                # Don't wrap the citation in additional brackets - let the markdown work
                 context_parts.append(f"Document {i}:\n{content}\nSource: {citation}\n")
         
         return "\n".join(context_parts)
@@ -364,69 +357,28 @@ Answer:"""
         s3_url = metadata.get('s3_url', '')
         filename = metadata.get('filename', '')
         
-        # DEBUG: Log the metadata to see what we're getting
-        logger.debug(f"Citation metadata: citation_anchor='{citation_anchor}', s3_url='{s3_url}', filename='{filename}'")
-        
         # If we have S3 URL, always create a clickable link
         if s3_url:
-            # Use citation_anchor as link text if available, otherwise use filename
             link_text = citation_anchor if citation_anchor else filename
             if link_text:
-                result = f"[{link_text}]({s3_url})"
-                logger.debug(f"Created clickable citation: {result}")
-                return result
+                return f"[{link_text}]({s3_url})"
         
         # Fallback to plain text citation if we have citation_anchor but no S3 URL
         if citation_anchor:
-            result = f"[{citation_anchor}]"
-            logger.debug(f"Created plain text citation: {result}")
-            return result
+            return f"[{citation_anchor}]"
         
         # Legacy fallback: build citation from filename and page_number
         page_number = metadata.get('page_number', '')
         
         if filename and page_number:
-            # Clean filename (remove path if present)
             clean_filename = filename.split('/')[-1] if '/' in filename else filename
-            result = f"[{clean_filename}#page-{page_number}]"
-            logger.debug(f"Created legacy citation: {result}")
-            return result
+            return f"[{clean_filename}#page-{page_number}]"
         
-        # If we have filename but no page number
         if filename:
             clean_filename = filename.split('/')[-1] if '/' in filename else filename
-            result = f"[{clean_filename}]"
-            logger.debug(f"Created filename-only citation: {result}")
-            return result
+            return f"[{clean_filename}]"
         
-        # Last resort
-        result = f"[Document {doc_index + 1}]"
-        logger.debug(f"Created fallback citation: {result}")
-        return result
-        
-        # Try to extract filename from source path
-        source = metadata.get('source', '')
-        if source:
-            # Extract filename from S3 key or path (e.g., "raw_docs/file.pdf" -> "file.pdf")
-            if '/' in source:
-                filename = source.split('/')[-1]
-                if page_number:
-                    citation = f"[{filename}#page-{page_number}]"
-                    return citation
-                else:
-                    citation = f"[{filename}]"
-                    return citation
-            else:
-                if page_number:
-                    citation = f"[{source}#page-{page_number}]"
-                    return citation
-                else:
-                    citation = f"[{source}]"
-                    return citation
-        
-        # Last resort: use a descriptive generic format
-        citation = f"[Document {doc_index}]"
-        return citation
+        return f"[Document {doc_index + 1}]"
     
     def _update_performance_stats(self, response_time: float):
         """Update performance statistics."""

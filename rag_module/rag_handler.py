@@ -19,7 +19,7 @@ from langchain_core.documents import Document
 from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 
-from .rag_semantic import perform_semantic_search, format_citation_with_url, get_sources_with_urls
+from .rag_semantic import perform_semantic_search
 from .rag_validator import (
     validate_query, 
     validate_tenant_context, 
@@ -261,6 +261,36 @@ def _format_and_validate_context(
     return validated_context, was_truncated
 
 
+def _build_citation_from_doc(doc: Document, doc_index: int) -> str:
+    """Build a citation with S3 URL if available."""
+    metadata = doc.metadata
+    citation_anchor = metadata.get('citation_anchor', '')
+    s3_url = metadata.get('s3_url', '')
+    filename = metadata.get('filename', '')
+    
+    # If we have S3 URL, create a clickable link
+    if s3_url:
+        link_text = citation_anchor if citation_anchor else filename
+        if link_text:
+            return f"[{link_text}]({s3_url})"
+    
+    # Fallback to plain text citation
+    if citation_anchor:
+        return f"[{citation_anchor}]"
+    
+    # Legacy fallback
+    page_number = metadata.get('page_number', '')
+    if filename and page_number:
+        clean_filename = filename.split('/')[-1] if '/' in filename else filename
+        return f"[{clean_filename}#page-{page_number}]"
+    
+    if filename:
+        clean_filename = filename.split('/')[-1] if '/' in filename else filename
+        return f"[{clean_filename}]"
+    
+    return f"[Document {doc_index}]"
+
+
 def _format_context(documents: List[Document]) -> str:
     """
     Format retrieved documents into a coherent context string with citations including URLs.
@@ -278,8 +308,8 @@ def _format_context(documents: List[Document]) -> str:
     citations_used = set()
     
     for i, doc in enumerate(documents, 1):
-        # Use the new format_citation_with_url function
-        citation_with_url = format_citation_with_url(doc)
+        # Build citation with S3 URL if available
+        citation_with_url = _build_citation_from_doc(doc, i)
         citations_used.add(citation_with_url)
         
         # Build source info for context
