@@ -19,7 +19,7 @@ from langchain_core.documents import Document
 from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 
-from .rag_semantic import perform_semantic_search
+from .rag_semantic import perform_semantic_search, format_citation_with_url, get_sources_with_urls
 from .rag_validator import (
     validate_query, 
     validate_tenant_context, 
@@ -46,7 +46,7 @@ llm = ChatOpenAI(
     max_retries=0  # We handle retries in our resilience layer
 )
 
-# RAG prompt template for academic content with citation support
+# RAG prompt template for academic content with URL-enabled citation support
 RAG_PROMPT_TEMPLATE = """You are an intelligent academic assistant helping students with their coursework and research. 
 
 Use the following context information to answer the user's question. The context comes from relevant course materials, documents, and academic resources.
@@ -62,6 +62,7 @@ Instructions:
 - Include specific details and examples from the context when relevant
 - Use an academic but accessible tone
 - IMPORTANT: When referencing information from the context, include the source citation provided in [brackets]
+- Citations may include clickable links to PDF documents - preserve these links in your response
 - At the end of your response, provide a "Sources:" section listing all citations used
 - Keep your response focused and concise while being thorough
 
@@ -262,13 +263,13 @@ def _format_and_validate_context(
 
 def _format_context(documents: List[Document]) -> str:
     """
-    Format retrieved documents into a coherent context string with citations.
+    Format retrieved documents into a coherent context string with citations including URLs.
     
     Args:
         documents (List[Document]): Retrieved documents
         
     Returns:
-        str: Formatted context string with citation anchors
+        str: Formatted context string with citation anchors including S3 URLs
     """
     if not documents:
         return "No relevant context available."
@@ -277,41 +278,24 @@ def _format_context(documents: List[Document]) -> str:
     citations_used = set()
     
     for i, doc in enumerate(documents, 1):
-        # Extract citation anchor from metadata
-        citation_anchor = None
-        source_info = ""
+        # Use the new format_citation_with_url function
+        citation_with_url = format_citation_with_url(doc)
+        citations_used.add(citation_with_url)
         
+        # Build source info for context
+        source_info = ""
         if doc.metadata:
-            # Try to get citation_anchor first
-            if "citation_anchor" in doc.metadata:
-                citation_anchor = doc.metadata["citation_anchor"]
-                citations_used.add(citation_anchor)
-            
-            # Build source info for context
             if "source" in doc.metadata:
                 source_info = f" (Source: {doc.metadata['source']})"
             elif "filename" in doc.metadata:
                 source_info = f" (File: {doc.metadata['filename']})"
-            
-            # If no citation_anchor, create one from available metadata
-            if not citation_anchor:
-                if "source" in doc.metadata:
-                    citation_anchor = f"[{doc.metadata['source']}]"
-                elif "filename" in doc.metadata:
-                    citation_anchor = f"[{doc.metadata['filename']}]"
-                else:
-                    citation_anchor = f"[Document {i}]"
-                citations_used.add(citation_anchor)
-        else:
-            citation_anchor = f"[Document {i}]"
-            citations_used.add(citation_anchor)
         
-        # Format each document chunk with citation
-        context_parts.append(f"Document {i}{source_info}:\n{doc.page_content}\n[Citation: {citation_anchor}]")
+        # Format each document chunk with URL-enabled citation
+        context_parts.append(f"Document {i}{source_info}:\n{doc.page_content}\n[Citation: {citation_with_url}]")
     
     formatted_context = "\n\n".join(context_parts)
     
-    logger.debug("Formatted context with %d documents and %d citations, total length: %d chars", 
+    logger.debug("Formatted context with %d documents and %d citations with URLs, total length: %d chars", 
                 len(documents), len(citations_used), len(formatted_context))
     
     return formatted_context

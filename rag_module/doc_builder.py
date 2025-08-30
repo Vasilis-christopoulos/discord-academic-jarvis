@@ -150,7 +150,11 @@ class DocBuilder:
                 "citation_anchor": citation_anchor,
                 "page_count": pdoc.metadata.get("page_count", 0),
                 "asset_count": len(page_content.assets),
-                "processing_method": "docling_page_based"
+                "processing_method": "docling_page_based",
+                # Add S3 URL metadata for preview links
+                "s3_bucket": pdoc.metadata.get("s3_bucket"),
+                "s3_key": pdoc.metadata.get("s3_key"),
+                "s3_url": pdoc.metadata.get("s3_url"),
             }
             
             # Add document title if available
@@ -210,7 +214,11 @@ class DocBuilder:
             "citation_anchor": document_name,
             "page_count": pdoc.metadata.get("page_count", 0),
             "asset_count": len(pdoc.assets),
-            "processing_method": "docling_document_level"
+            "processing_method": "docling_document_level",
+            # Add S3 URL metadata for preview links
+            "s3_bucket": pdoc.metadata.get("s3_bucket"),
+            "s3_key": pdoc.metadata.get("s3_key"),
+            "s3_url": pdoc.metadata.get("s3_url"),
         }
         
         # Add document title if available

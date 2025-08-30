@@ -24,25 +24,15 @@ import asyncio
 import base64
 import io
 from dataclasses import dataclass
-from typing import List, Dict, Union
+from typing import List, Dict, Union, Optional, Any, cast
 from openai import AsyncOpenAI
 from PIL import Image
 from tenacity import retry, stop_after_attempt, wait_random_exponential
 
 from utils.logging_config import logger
 
-# Try to import AssetInfo from the updated pdfingestor
-try:
-    from .pdfingestor import AssetInfo
-except ImportError:
-    # Fallback definition for backward compatibility
-    @dataclass
-    class AssetInfo:
-        asset_id: str
-        asset_type: str  
-        image_bytes: bytes
-        page_number: int
-        bbox: Dict[str, float] = None
+# Import AssetInfo from pdfingestor to ensure type consistency
+from .pdfingestor import AssetInfo
 
 IMAGES_PER_REQUEST = 4                 # keep prompts < 3 k tokens
 MODEL = "gpt-4o-2024-08-06"
@@ -228,10 +218,10 @@ class VisionCaptioner:
                 model=MODEL,
                 temperature=0.2,
                 max_tokens=200 * len(assets),   # Increased for detailed descriptions
-                messages=[
+                messages=cast(Any, [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": [{"type": "text", "text": user_text}] + content_blocks},
-                ],
+                ]),
             )
             text = resp.choices[0].message.content
             lines = [line.strip() for line in text.splitlines() if line.strip()]

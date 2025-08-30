@@ -85,10 +85,12 @@ Question: {query}
 
 Instructions:
 - Answer concisely using ONLY information from the context above
-- Include citations in square brackets for every claim [filename.pdf#page-X]
+- For citations, use the EXACT source links provided in the context (e.g., if the context shows "Source: [filename.pdf#page-1](https://url)", use that exact format in your response)
+- Include citations for every claim by copying the source links exactly as they appear in the context
 - If the context doesn't contain the answer, say "The provided documents do not contain information about this topic"
 - Keep your response brief and focused
 - Do NOT use external knowledge or make assumptions
+- Do NOT modify or simplify the source links - use them exactly as provided
 
 Answer:"""
         )
@@ -350,33 +352,57 @@ Answer:"""
             # Format document content
             content = doc.page_content.strip()
             if content:
-                context_parts.append(f"Document {i}:\n{content}\n[Citation: {citation}]\n")
+                # Don't wrap the citation in additional brackets - let the markdown work
+                context_parts.append(f"Document {i}:\n{content}\nSource: {citation}\n")
         
         return "\n".join(context_parts)
     
     def _build_citation(self, metadata: Dict[str, Any], doc_index: int) -> str:
-        """Build a proper citation from document metadata."""
+        """Build a proper citation from document metadata with S3 URL if available."""
         
-        # First, try to use the pre-built citation_anchor (preferred)
         citation_anchor = metadata.get('citation_anchor', '')
-        if citation_anchor and not citation_anchor.startswith('doc'):
-            return f"[{citation_anchor}]"
-        
-        # Build citation from filename and page_number
+        s3_url = metadata.get('s3_url', '')
         filename = metadata.get('filename', '')
+        
+        # DEBUG: Log the metadata to see what we're getting
+        logger.debug(f"Citation metadata: citation_anchor='{citation_anchor}', s3_url='{s3_url}', filename='{filename}'")
+        
+        # If we have S3 URL, always create a clickable link
+        if s3_url:
+            # Use citation_anchor as link text if available, otherwise use filename
+            link_text = citation_anchor if citation_anchor else filename
+            if link_text:
+                result = f"[{link_text}]({s3_url})"
+                logger.debug(f"Created clickable citation: {result}")
+                return result
+        
+        # Fallback to plain text citation if we have citation_anchor but no S3 URL
+        if citation_anchor:
+            result = f"[{citation_anchor}]"
+            logger.debug(f"Created plain text citation: {result}")
+            return result
+        
+        # Legacy fallback: build citation from filename and page_number
         page_number = metadata.get('page_number', '')
         
         if filename and page_number:
             # Clean filename (remove path if present)
             clean_filename = filename.split('/')[-1] if '/' in filename else filename
-            citation = f"[{clean_filename}#page-{page_number}]"
-            return citation
+            result = f"[{clean_filename}#page-{page_number}]"
+            logger.debug(f"Created legacy citation: {result}")
+            return result
         
         # If we have filename but no page number
         if filename:
             clean_filename = filename.split('/')[-1] if '/' in filename else filename
-            citation = f"[{clean_filename}]"
-            return citation
+            result = f"[{clean_filename}]"
+            logger.debug(f"Created filename-only citation: {result}")
+            return result
+        
+        # Last resort
+        result = f"[Document {doc_index + 1}]"
+        logger.debug(f"Created fallback citation: {result}")
+        return result
         
         # Try to extract filename from source path
         source = metadata.get('source', '')

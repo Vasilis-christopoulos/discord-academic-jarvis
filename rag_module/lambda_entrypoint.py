@@ -23,6 +23,10 @@ AWS_REGION          – defaults to "ca-central-1"
 """
 
 from __future__ import annotations
+
+# Configure for Lambda environment before any other imports
+import os
+os.environ["PINECONE_POOL_THREADS"] = "1"
 import asyncio
 import urllib.parse
 import json
@@ -174,7 +178,7 @@ async def _get_file_size(bucket: str, key: str) -> float:
         logger.warning("Failed to get file size for %s: %s", key, str(e))
         return 0.0
 
-async def _process_with_docling(bucket: str, key: str, tenant: dict, tmp_dir: str, monitor: MemoryMonitor, context) -> Dict[str, Any]:
+async def _process_with_docling(bucket: str, key: str, tenant: dict, tmp_dir: Optional[str], monitor: Optional[MemoryMonitor], context: Optional[Any]) -> Dict[str, Any]:
     """Process PDF using Docling with memory monitoring."""
     result = {'chunks_created': 0, 'assets_processed': 0, 'success': False}
     
@@ -244,7 +248,7 @@ async def _process_with_docling(bucket: str, key: str, tenant: dict, tmp_dir: st
         logger.error("Docling processing failed for %s: %s", key, str(e))
         raise
 
-async def _process_with_fallback(bucket: str, key: str, tenant: dict, tmp_dir: str) -> Dict[str, Any]:
+async def _process_with_fallback(bucket: str, key: str, tenant: dict, tmp_dir: Optional[str]) -> Dict[str, Any]:
     """Fallback processing using simpler PDF parsing when Docling fails."""
     result = {'chunks_created': 0, 'assets_processed': 0, 'success': False}
     
@@ -310,7 +314,7 @@ async def _process_with_fallback(bucket: str, key: str, tenant: dict, tmp_dir: s
 
 
 # Enhanced async processing for ONE object key
-async def _process_object(bucket: str, key: str, tenant, context=None, monitor: MemoryMonitor = None) -> Dict[str, Any]:
+async def _process_object(bucket: str, key: str, tenant, context=None, monitor: Optional[MemoryMonitor] = None) -> Dict[str, Any]:
     """Process a single PDF using the enhanced Docling pipeline with comprehensive safety checks."""
     
     start_time = time.time()

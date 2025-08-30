@@ -128,7 +128,7 @@ prompt = PromptTemplate(
 )
 
 
-llm = ChatOpenAI(model_name="gpt-4.1-nano", temperature=0)
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 parse_pipeline = prompt | llm | parser
 
 

@@ -115,28 +115,22 @@ class SemanticSearcher:
             # Apply reranking if enabled and we have documents
             if enable_reranking and documents:
                 documents = rerank_documents(query, documents, max_docs=initial_k)
-                # Limit to requested number after reranking
                 documents = documents[:k]
-                logger.debug("Applied reranking, final count: %d documents", len(documents))
             
-            # CITATION FIX: Prefer PDF documents over calendar/task data
-            # If we have both PDF documents (with filename) and calendar data, prioritize PDFs
+            # Prefer PDF documents over calendar data
             pdf_documents = [doc for doc in documents if doc.metadata.get('filename')]
             calendar_documents = [doc for doc in documents if not doc.metadata.get('filename')]
             
             if pdf_documents:
-                # Prefer PDF documents and take calendar documents only if we need more
                 documents = pdf_documents[:k]
                 if len(documents) < k and calendar_documents:
-                    documents.extend(calendar_documents[:k - len(documents)])
-                logger.debug("Applied PDF preference: %d PDF docs, %d calendar docs", 
-                           len(pdf_documents), len(calendar_documents))
+                    remaining_slots = k - len(documents)
+                    documents.extend(calendar_documents[:remaining_slots])
             
             return documents
                 
         except Exception as e:
             logger.error("Error performing semantic search: %s", str(e))
-            # Return empty list on error to prevent application crashes
             return []
     
     def search_with_scores(
@@ -184,17 +178,7 @@ class SemanticSearcher:
                     (doc, score) for doc, score in docs_with_scores 
                     if score >= score_threshold
                 ]
-                logger.debug(
-                    "Applied score threshold %.3f: %d/%d documents retained", 
-                    score_threshold, len(filtered_docs_with_scores), len(docs_with_scores)
-                )
                 docs_with_scores = filtered_docs_with_scores
-            
-            logger.debug(
-                "Retrieved %d documents with scores: %s", 
-                len(docs_with_scores),
-                [f"{score:.3f}" for _, score in docs_with_scores[:3]]  # Log first 3 scores
-            )
             
             return docs_with_scores
             
@@ -207,66 +191,17 @@ def create_metadata_filter(
     tenant_config: Dict[str, Any], 
     additional_filters: Optional[Dict[str, Any]] = None
 ) -> Optional[Dict[str, Any]]:
-    """
-    Create metadata filters for tenant-specific document isolation.
-    
-    This function constructs appropriate metadata filters to ensure that search
-    results are scoped to the correct tenant and channel context. It prevents
-    data leakage between different Discord guilds and channels.
-    
-    Args:
-        tenant_config (dict): Tenant configuration containing guild/channel info
-        additional_filters (dict, optional): Additional custom filters to apply
-        
-    Returns:
-        dict or None: Combined metadata filter dictionary, or None if no filters needed
-        
-    Note:
-        If documents don't have guild_id metadata, this will return None to avoid
-        filtering out all documents. This is common when documents are uploaded
-        without tenant-specific metadata.
-        
-    Example:
-        filter_dict = create_metadata_filter(
-            tenant_config={"guild_id": 123, "name": "test-guild"},
-            additional_filters={"document_type": "pdf"}
-        )
-    """
+    """Create metadata filters for tenant-specific document isolation."""
     filters = {}
     
-    # Only add guild_id filter if we're in a multi-tenant setup and have reason
-    # to believe documents have this metadata field. For now, we'll skip this
-    # since the documents in Pinecone don't have guild_id metadata.
-    
-    # NOTE: Documents in the current Pinecone index don't have guild_id metadata.
-    # The metadata structure includes: filename, source, title, page_number, etc.
-    # If you need tenant isolation, you would need to:
-    # 1. Re-upload documents with guild_id metadata, or
-    # 2. Use a different field like 'source' for filtering, or
-    # 3. Use separate indices per tenant
-    
-    # CITATION FIX: Prefer PDF documents over calendar/task data
-    # The index contains both PDF chunks (with filename metadata) and calendar tasks.
-    # We prioritize PDF documents by filtering for documents that have a filename field.
-    # This ensures we get proper citations with [filename.pdf#page-X] format instead of
-    # generic [Document 1] citations from calendar data.
     prefer_pdfs = tenant_config.get("prefer_pdf_documents", True)
-    if prefer_pdfs:
-        # Note: Pinecone might not support $exists operator. 
-        # Let's try a more permissive approach - we'll first try without filtering
-        # and add PDF preference at the search level instead
-        logger.debug("PDF preference enabled - will prioritize documents with filename metadata during search")
     
-    # For now, we'll use additional_filters only if provided
     if additional_filters:
         filters.update(additional_filters)
     
-    # Return None if no filters to apply (this will disable filtering)
     if not filters:
-        logger.debug("No metadata filters applied - documents don't have tenant metadata")
         return None
     
-    logger.debug("Created metadata filter: %s", filters)
     return filters
 
 
@@ -345,3 +280,49 @@ def perform_semantic_search(
             filter_metadata=metadata_filter,
             enable_reranking=enable_reranking
         )
+
+
+def format_citation_with_url(doc: Document) -> str:
+    """
+    Format a citation with S3 preview URL if available.
+    Only PDF documents get clickable URLs - calendar events get plain text citations.
+    
+    Args:
+        doc (Document): Document with metadata containing citation and URL info
+        
+    Returns:
+        str: Formatted citation with URL for PDFs, plain text for calendar events
+    """
+    metadata = doc.metadata
+    citation_anchor = metadata.get('citation_anchor', 'Document')
+    s3_url = metadata.get('s3_url')
+    filename = metadata.get('filename')
+    
+    # Only add URLs for PDF documents (which have filename metadata)
+    # Calendar events and other non-document data should not have clickable citations
+    if s3_url and filename and filename.lower().endswith('.pdf'):
+        citation = f"[{citation_anchor}]({s3_url})"
+    else:
+        # Plain text citation for calendar events and non-PDF content
+        citation = f"[{citation_anchor}]"
+    
+    return citation
+
+
+def get_sources_with_urls(documents: List[Document]) -> List[str]:
+    """
+    Extract formatted source citations with URLs from a list of documents.
+    
+    Args:
+        documents (List[Document]): List of documents to extract sources from
+        
+    Returns:
+        List[str]: List of unique formatted citations with URLs
+    """
+    sources = set()
+    
+    for doc in documents:
+        citation = format_citation_with_url(doc)
+        sources.add(citation)
+    
+    return sorted(list(sources))

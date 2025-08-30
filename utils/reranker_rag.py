@@ -15,8 +15,7 @@ from settings import settings
 # Initialize LLM for reranking
 _rerank_llm = ChatOpenAI(
     model="gpt-4o-mini",
-    temperature=0,
-    api_key=settings.openai_api_key
+    temperature=0
 )
 
 def rerank_documents(query: str, documents: List[Document], max_docs: int = 10) -> List[Document]:
@@ -99,11 +98,15 @@ INSTRUCTIONS:
 Response (JSON array only):"""
 
         # Get reranking from LLM
-        logger.debug("Reranking prompt: %s", prompt)
         response = _rerank_llm.invoke(prompt)
-        logger.debug("Reranking response: %s", response.content.strip())
+        response_text = response.content if hasattr(response, 'content') else str(response)
         
-        ranked_indices = json.loads(response.content.strip())
+        # Handle both string and non-string responses
+        if isinstance(response_text, str):
+            ranked_indices = json.loads(response_text.strip())
+        else:
+            # If response_text is already a list/dict, use it directly
+            ranked_indices = response_text
         
         # Validate response
         if not isinstance(ranked_indices, list):

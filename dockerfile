@@ -14,16 +14,26 @@ ENV NUMBA_CACHE_DIR=/tmp/.cache/numba
 # Create cache directories
 RUN mkdir -p /tmp/.cache/huggingface /tmp/.cache/torch /tmp/.cache/numba
 
-# 1️⃣  app code
-COPY rag_module/             ./rag_module/
-COPY utils/vector_store.py   utils/logging_config.py   ./utils/
-COPY settings_ingest.py      ./
-COPY tenants.json            /opt/app/tenants.json
+# 1️⃣  app code - only files needed for embedding Lambda
+COPY rag_module/lambda_entrypoint.py     ./rag_module/
+COPY rag_module/pdfingestor.py          ./rag_module/
+COPY rag_module/vision_captioner.py     ./rag_module/
+COPY rag_module/doc_builder.py          ./rag_module/
+COPY rag_module/ingest_vector_store.py  ./rag_module/
+COPY rag_module/__init__.py             ./rag_module/
 
-# 2️⃣  deps (modern stack, single line)
+# Copy only required utils
+COPY utils/logging_config.py            ./utils/
+COPY utils/__init__.py                  ./utils/
+
+# Copy settings and config
+COPY settings_ingest.py                 ./
+COPY tenants.json                       /opt/app/tenants.json
+
+# 2️⃣  deps (optimized for embedding Lambda only)
 RUN pip install --upgrade pip && \
     pip install \
-      "PyMuPDF<1.26" pillow \
+      pillow \
       openai pinecone>=6 tenacity \
       langchain-openai langchain-pinecone langchain-text-splitters \
       pydantic-settings \

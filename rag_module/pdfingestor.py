@@ -28,12 +28,12 @@ import re
 
 import boto3
 from docling.document_converter import DocumentConverter, PdfFormatOption
-from docling.datamodel.base_models import InputFormat, DocumentStream
+from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import PdfPipelineOptions
-from docling_core.types.doc import (
+from docling_core.types.doc.document import (
     PictureItem, TableItem, FormulaItem, CodeItem, 
     SectionHeaderItem, ListItem, GroupItem, KeyValueItem,
-    FloatingItem, ImageRefMode
+    FloatingItem
 )
 
 from utils.logging_config import logger
@@ -259,67 +259,51 @@ class S3PDFIngestor:
     def _parse_pdf_with_docling(self, path: Path, s3_key: str) -> IngestedDoc:
         """Extract structured content from PDF using Docling."""
         try:
-            # Log current working directory and temp settings
-            import os
-            logger.info("Current working directory: %s", os.getcwd())
-            logger.info("tempfile.gettempdir(): %s", tempfile.gettempdir())
-            logger.info("TMPDIR env var: %s", os.environ.get('TMPDIR'))
-            logger.info("TMP env var: %s", os.environ.get('TMP'))
-            logger.info("TEMP env var: %s", os.environ.get('TEMP'))
-            logger.info("Processing PDF file: %s", path)
-            
-            # Convert PDF using Docling
-            logger.info("Starting Docling conversion...")
             conv_result = self.doc_converter.convert(path)
-            logger.info("Docling conversion completed successfully")
             doc = conv_result.document
             
-            # Extract metadata
             metadata = {
                 "filename": path.name,
                 "page_count": len(doc.pages),
                 "title": getattr(doc, 'title', None) or path.stem,
+                "s3_bucket": self.bucket,
+                "s3_key": s3_key,
+                "s3_url": f"https://{self.bucket}.s3.amazonaws.com/{s3_key}",
             }
             
             # First pass: collect all elements with their positions for analysis
             all_elements = []
             page_dimensions = {}
             
-            logger.debug("Starting document element iteration")
             for element, level in doc.iterate_items():
-                # Try to determine page from bbox if page_no is not available
                 page_no = getattr(element, 'page_no', None)
                 bbox = None
                 
-                logger.debug("Processing element: %s, page_no=%s, is_asset=%s", 
-                           type(element).__name__, page_no, 
-                           isinstance(element, (PictureItem, TableItem, FormulaItem, CodeItem, 
-                                              SectionHeaderItem, ListItem, GroupItem, KeyValueItem, FloatingItem)))
+                # Try to get bbox from element provenance if available
+                try:
+                    prov = getattr(element, 'prov', None)
+                    if prov:
+                        prov = prov[0] if prov else None
+                        if prov and hasattr(prov, 'bbox'):
+                            bbox = {
+                                'left': prov.bbox.l,
+                                'top': prov.bbox.t, 
+                                'right': prov.bbox.r,
+                                'bottom': prov.bbox.b
+                            }
+                            if page_no is None and hasattr(prov, 'page_no'):
+                                page_no = prov.page_no
+                except (AttributeError, IndexError):
+                    pass
                 
-                if hasattr(element, 'prov') and element.prov:
-                    prov = element.prov[0] if element.prov else None
-                    if prov and hasattr(prov, 'bbox'):
-                        bbox = {
-                            'left': prov.bbox.l,
-                            'top': prov.bbox.t, 
-                            'right': prov.bbox.r,
-                            'bottom': prov.bbox.b
-                        }
-                        # If page_no is unknown, try to infer from position using bbox
-                        if page_no is None and prov and hasattr(prov, 'page_no'):
-                            page_no = prov.page_no
-                
-                # If still no page number, try to infer from bbox coordinates
+                # Infer page from bbox if needed
                 if page_no is None and bbox and hasattr(doc, 'pages') and len(doc.pages) > 1:
                     page_no = self._infer_page_from_bbox(bbox, doc)
                 
                 if page_no is None:
-                    page_no = 1  # Default to page 1 only as last resort
+                    page_no = 1
                 
-                # Ensure page_no is valid
                 page_no = max(1, min(page_no, len(doc.pages)))
-                
-                logger.debug("Final page_no: %d (doc has %d pages)", page_no, len(doc.pages))
                 
                 all_elements.append({
                     'element': element,
@@ -330,23 +314,19 @@ class S3PDFIngestor:
                                                    SectionHeaderItem, ListItem, GroupItem, KeyValueItem, FloatingItem))
                 })
                 
-                # Track page dimensions - use page_no as 1-indexed
+                # Track page dimensions
                 if page_no not in page_dimensions and hasattr(doc, 'pages') and 1 <= page_no <= len(doc.pages):
                     try:
-                        logger.debug("Getting page dimensions for page %d", page_no)
-                        page = doc.pages[page_no - 1]  # Convert to 0-indexed for list access
+                        page = doc.pages[page_no - 1]
                         if hasattr(page, 'size') and page.size and hasattr(page.size, 'width') and hasattr(page.size, 'height'):
                             page_dimensions[page_no] = {
                                 'width': page.size.width,
                                 'height': page.size.height
                             }
-                            logger.debug("Got page %d dimensions: %dx%d", page_no, page.size.width, page.size.height)
                         else:
-                            page_dimensions[page_no] = {'width': 600, 'height': 800}  # Default
-                            logger.debug("Using default dimensions for page %d", page_no)
-                    except (IndexError, KeyError, AttributeError) as e:
-                        logger.warning("Failed to get page dimensions for page %d: %s", page_no, e)
-                        page_dimensions[page_no] = {'width': 600, 'height': 800}  # Default
+                            page_dimensions[page_no] = {'width': 600, 'height': 800}
+                    except (IndexError, KeyError, AttributeError):
+                        page_dimensions[page_no] = {'width': 600, 'height': 800}
             
             # Second pass: filter and analyze assets
             assets = []
@@ -373,20 +353,14 @@ class S3PDFIngestor:
                 page_no = elem_info['page_no']
                 
                 # Only process truly visual elements for vision captioning
-                # TableItem, CodeItem, FormulaItem should be processed as text/markdown by DocBuilder
                 if isinstance(element, PictureItem):
-                    # Pictures always need vision captioning (could be photos, charts, images of tables/code, etc.)
                     asset_type = "picture"
                     asset_counter += 1
                 elif isinstance(element, (SectionHeaderItem, GroupItem, FloatingItem)):
-                    # Structural elements that are likely visual figures/diagrams
                     asset_type = "figure"
                     asset_counter += 1
                 else:
                     # Skip TableItem, CodeItem, FormulaItem, ListItem, KeyValueItem
-                    # These should be processed as structured text by DocBuilder, not vision captioned
-                    logger.debug("Skipping text-based element for vision captioning: %s (page %d)", 
-                               type(element).__name__, page_no)
                     continue
                     
                 asset_id = f"{asset_type}_{asset_counter}"
@@ -395,65 +369,41 @@ class S3PDFIngestor:
                     # Calculate dimensions and area
                     width, height, area = 0, 0, 0
                     if bbox:
-                        # Handle PDF coordinate system properly
                         width = abs(bbox['right'] - bbox['left'])
                         height = abs(bbox['bottom'] - bbox['top'])
                         area = width * height
                     
-                    # Apply comprehensive filtering
+                    # Apply filtering
                     filter_reasons = []
                     
-                    # Log asset details for debugging
-                    logger.debug("Asset %s: type=%s, area=%.0f, dims=%.0fx%.0f, page=%d, pos=(%.0f,%.0f)", 
-                              asset_id, asset_type, area, width, height, page_no, 
-                              bbox['left'] if bbox else 0, bbox['top'] if bbox else 0)
-                    
-                    # 1. Minimum area filter (removes small decorative elements like bullets, icons)
                     if area > 0 and area < self.min_asset_area:
-                        filter_reasons.append(f"too small (area={area:.0f} < {self.min_asset_area})")
+                        filter_reasons.append(f"too small (area={area:.0f})")
                     
-                    # 1b. Small square filter (removes bullet points and small icons)
-                    if width > 0 and height > 0 and max(width, height) < 120:  # Assets smaller than 120px in any dimension
-                        filter_reasons.append(f"small decorative element (max_dim={max(width, height):.0f} < 120)")
+                    if width > 0 and height > 0 and max(width, height) < 120:
+                        filter_reasons.append(f"small decorative element")
                     
-                    # 2. Aspect ratio filter (removes decorative lines)
                     if width > 0 and height > 0:
                         aspect_ratio = max(width/height, height/width)
                         if aspect_ratio > self.max_aspect_ratio:
-                            filter_reasons.append(f"extreme aspect ratio ({aspect_ratio:.1f})")
+                            filter_reasons.append(f"extreme aspect ratio")
                     
-                    # 3. Header/footer position filter  
-                    # Note: PDF coordinate system has Y=0 at bottom, but assets may be reported differently
                     if bbox and page_no in page_dimensions:
                         page_height = page_dimensions[page_no]['height']
                         y_position = bbox['top']
                         
-                        logger.debug("Page %d: height=%d, y_pos=%.0f", page_no, page_height, y_position)
-                        
-                        # Very conservative header/footer detection
-                        # Only filter obvious header elements that are way outside the page bounds
-                        # or very small decorative elements in extreme positions
-                        
-                        # Header detection: y significantly > page height (coordinate overflow)
-                        if y_position > page_height * 1.3:  # 30% beyond page height
-                            filter_reasons.append(f"in header region (y={y_position:.0f}, page_h={page_height})")
-                        # Footer detection: y < 3% of page height (very bottom)
+                        if y_position > page_height * 1.3:
+                            filter_reasons.append(f"in header region")
                         elif y_position < page_height * 0.03:
-                            filter_reasons.append(f"in footer region (y={y_position:.0f}, page_h={page_height})")
+                            filter_reasons.append(f"in footer region")
                     
-                    # 4. Very small dimension filter
                     if width > 0 and height > 0 and (width < 20 or height < 20):
-                        filter_reasons.append(f"dimension too small (w={width:.0f}, h={height:.0f})")
+                        filter_reasons.append(f"dimension too small")
                     
-                    # 5. Recurring asset filter (logos, page numbers, etc.)
                     asset_key = f"{asset_type}_{width:.0f}x{height:.0f}"
                     if asset_key in recurring_assets and recurring_assets[asset_key]['count'] >= 3:
-                        # This asset appears frequently in similar positions - likely decorative
-                        filter_reasons.append(f"recurring decorative element (appears {recurring_assets[asset_key]['count']} times)")
+                        filter_reasons.append(f"recurring decorative element")
                     
-                    # Skip asset if any filter criteria are met
                     if filter_reasons:
-                        logger.debug("Filtered out asset %s: %s", asset_id, "; ".join(filter_reasons))
                         continue
                     
                     # Get the image for this element (if available)
@@ -461,63 +411,61 @@ class S3PDFIngestor:
                     image_bytes = None
                     
                     # Try to get image representation
-                    if hasattr(element, 'get_image') and callable(getattr(element, 'get_image')):
-                        try:
-                            image = element.get_image(doc)
-                        except Exception as e:
-                            logger.debug("Failed to get image for %s: %s", asset_id, e)
+                    try:
+                        get_image_method = getattr(element, 'get_image', None)
+                        if get_image_method and callable(get_image_method):
+                            image = get_image_method(doc)
+                    except (AttributeError, Exception):
+                        pass
                     
                     # Handle different content types
-                    if image:
-                        # Convert PIL image to bytes
-                        import io
-                        img_buffer = io.BytesIO()
-                        image.save(img_buffer, format='PNG', optimize=True)
-                        image_bytes = img_buffer.getvalue()
-                        
-                        # Apply file size filter for image assets
-                        if len(image_bytes) < self.min_asset_bytes:
-                            logger.debug("Filtered out asset %s: file too small (%d bytes)", 
-                                       asset_id, len(image_bytes))
+                    if image is not None:
+                        try:
+                            # Convert PIL image to bytes
+                            import io
+                            from PIL import Image as PILImage
+                            
+                            # Type check to ensure we have a PIL Image
+                            if isinstance(image, PILImage.Image) or hasattr(image, 'save'):
+                                img_buffer = io.BytesIO()
+                                image.save(img_buffer, format='PNG', optimize=True)  # type: ignore
+                                image_bytes = img_buffer.getvalue()
+                                
+                                # Apply file size filter for image assets
+                                if len(image_bytes) < self.min_asset_bytes:
+                                    continue
+                        except Exception:
                             continue
                             
                     elif asset_type in ["formula", "code", "structured"]:
-                        # For text-based assets, create a simple placeholder image or extract text
+                        # For text-based assets, create a simple placeholder
                         try:
-                            if hasattr(element, 'text') and element.text:
-                                # Create a minimal image placeholder or store text content
-                                # For now, we'll create a simple text-based placeholder
-                                placeholder_text = f"[{asset_type.upper()}]: {element.text[:100]}..."
+                            element_text = getattr(element, 'text', None)
+                            if element_text:
+                                placeholder_text = f"[{asset_type.upper()}]: {element_text[:100]}..."
                                 
-                                # Create a simple image with the text (optional - for vision captioning)
-                                # Or just use text content directly in markdown
+                                # Create a simple image with the text
                                 from PIL import Image, ImageDraw, ImageFont
                                 img = Image.new('RGB', (400, 100), color='white')
                                 draw = ImageDraw.Draw(img)
                                 try:
-                                    # Try to use a default font
                                     font = ImageFont.load_default()
                                 except:
                                     font = None
                                 
-                                # Wrap text if too long
                                 wrapped_text = placeholder_text[:50] + "..." if len(placeholder_text) > 50 else placeholder_text
                                 draw.text((10, 10), wrapped_text, fill='black', font=font)
                                 
-                                # Convert to bytes
                                 import io
                                 img_buffer = io.BytesIO()
                                 img.save(img_buffer, format='PNG')
                                 image_bytes = img_buffer.getvalue()
                             else:
-                                # Skip assets without content
-                                logger.debug("Skipping %s asset %s: no content available", asset_type, asset_id)
                                 continue
-                        except Exception as e:
-                            logger.debug("Failed to create placeholder for %s: %s", asset_id, e)
+                                continue
+                        except Exception:
                             continue
                     else:
-                        logger.debug("Skipping asset %s: no image data available", asset_id)
                         continue
                     
                     if image_bytes:
@@ -528,24 +476,16 @@ class S3PDFIngestor:
                             page_number=page_no,
                             bbox=bbox
                         ))
-                        
-                        logger.info("Added %s asset: %s to page %d (%.0fx%.0f, %d bytes)", 
-                                   asset_type, asset_id, page_no, width, height, len(image_bytes))
-                    else:
-                        logger.debug("Skipping asset %s: failed to generate content", asset_id)
-                except Exception as e:
-                    logger.warning("Failed to extract image for %s: %s", asset_id, e)
+                except Exception:
                     continue
             
-            logger.info("Asset extraction: %d assets extracted after filtering", len(assets))
+            logger.info("Asset extraction: %d assets extracted", len(assets))
             
-            # Generate markdown with placeholders in correct reading order
+            # Generate markdown with placeholders
             markdown_content = self._generate_markdown_with_ordered_placeholders(doc, assets, all_elements)
             
-            logger.info(
-                "Parsed PDF: %d pages, %d assets, %d chars of markdown", 
-                len(doc.pages), len(assets), len(markdown_content)
-            )
+            logger.info("Parsed PDF: %d pages, %d assets, %d chars", 
+                       len(doc.pages), len(assets), len(markdown_content))
             
             # Extract page-by-page content for citation support
             pages_content = self._extract_page_contents(doc, assets)
@@ -601,15 +541,12 @@ class S3PDFIngestor:
                 asset_patterns[pattern_key]['pages'].append(page_no)
                 asset_patterns[pattern_key]['positions'].append((bbox['left'], bbox['top']))
         
-        # Return patterns that appear on multiple pages
         recurring = {}
         for pattern, info in asset_patterns.items():
-            if info['count'] >= 2:  # Appears on 2+ pages
-                # Use a simpler key for filtering
-                size_key = pattern.split('_')[1]  # Extract size part
+            if info['count'] >= 2:
+                size_key = pattern.split('_')[1]
                 recurring[size_key] = info
         
-        logger.debug("Detected %d recurring asset patterns", len(recurring))
         return recurring
 
     def _generate_markdown_with_ordered_placeholders(self, doc, assets: List[AssetInfo], all_elements) -> str:
@@ -679,7 +616,6 @@ class S3PDFIngestor:
             # Clean up any excessive newlines
             processed_markdown = re.sub(r'\n{3,}', '\n\n', processed_markdown)
             
-            logger.debug("Markdown generation: placed %d assets in reading order", asset_index)
             return processed_markdown
             
         except Exception as e:
