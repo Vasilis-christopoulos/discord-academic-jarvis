@@ -1,6 +1,6 @@
 # Discord Academic Jarvis
 
-A sophisticated multi-tenant Discord bot designed for academic environments, providing AI-powered document analysis and intelligent calendar management. Built with modern AI/ML technologies and cloud infrastructure for scalable, production-ready deployment.
+A sophisticated multi-tenant Discord bot designed for academic environments, providing AI-powered document analysis and intelligent calendar retrieval.
 
 ## 🎯 Project Overview
 
