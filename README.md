@@ -188,49 +188,6 @@ graph TD
 - **Supabase**: PostgreSQL-as-a-Service for rate limiting and analytics
 - **Discord API**: Slash commands, embeds, and permission management
 
-## 📁 Project Structure
-
-```
-discord-academic-jarvis/
-├── main_bot.py                 # Discord bot entry point
-├── settings.py                 # Configuration management
-├── tenants.json               # Multi-tenant configuration
-├── requirements.txt           # Python dependencies
-├── dockerfile                 # Lambda container definition
-├── deploy-lambda.sh          # AWS deployment script
-│
-├── rag_module/               # RAG system components
-│   ├── rag_handler_optimized.py    # Main RAG logic
-│   ├── rag_semantic.py             # Vector search
-│   ├── ingest_pipeline.py          # Document processing
-│   ├── lambda_entrypoint.py        # AWS Lambda handler
-│   ├── pdfingestor.py              # Docling-based PDF processing
-│   ├── vision_captioner.py         # Image understanding
-│   ├── rate_limiter.py             # Usage tracking
-│   └── rag_cache.py                # Multi-layer caching
-│
-├── calendar_module/          # Calendar system components
-│   ├── calendar_handler.py         # Main calendar logic
-│   ├── query_parser.py             # NLP query understanding
-│   ├── sync.py                     # Google API synchronization
-│   ├── delta_sync.py               # Efficient incremental sync
-│   └── sync_cache.py               # Sync optimization
-│
-├── utils/                    # Shared utilities
-│   ├── vector_store.py             # Pinecone integration
-│   ├── hybrid_search_utils.py      # Advanced search algorithms
-│   ├── channel_discovery.py        # Dynamic permissions
-│   ├── reranker_rag.py             # LLM reranking for RAG
-│   └── reranker_calendar.py        # LLM reranking for calendar
-│
-├── sql/                      # Database schema
-│   └── rate_limiting_schema_final.sql
-│
-└── tests/                    # Comprehensive test suite
-    ├── unit tests
-    └── integration/          # Real API integration tests
-```
-
 ## 🔧 Configuration
 
 ### Environment Variables
