@@ -85,7 +85,9 @@ Return **exactly** one syntactically-valid JSON object with the keys below and *
   - Missing time → use `00:00:00`.
 - **"date_to"** (string | null)  
   - ISO-8601 with offset.  
-  - If no explicit end is given, set it so the window is **30 days** after `date_from`.  
+  - For specific days (e.g., "today", "tomorrow", "this Wednesday", "two days from today"), set end to 23:59:59 of the SAME day as date_from.
+  - For periods (e.g., "this week", "next month"), set end to the last day of that period.
+  - If no explicit end is given and no specific time period is implied, set it so the window is **7 days** after `date_from`.  
   - Missing time → `23:59:59`.
 - **"filter"** (string | null)  
   - Keyword / short phrase that should appear in title or description (project, location, person).  
@@ -101,8 +103,16 @@ Return **exactly** one syntactically-valid JSON object with the keys below and *
 ## Examples
 User: "When is Alice's project review?"
 → {{"applicable": true, "type": "event", "date_from": "2025-05-26T00:00:00-04:00",
-   "date_to": "2025-06-25T23:59:59-04:00", "filter": "alice project review",
+   "date_to": "2025-06-02T23:59:59-04:00", "filter": "alice project review",
    "limit": 1}}
+
+User: "What's happening today?"
+→ {{"applicable": true, "type": "both", "date_from": "2025-05-26T00:00:00-04:00",
+   "date_to": "2025-05-26T23:59:59-04:00", "filter": "", "limit": 10}}
+
+User: "What's happening two days from today?"
+→ {{"applicable": true, "type": "both", "date_from": "2025-05-28T00:00:00-04:00",
+   "date_to": "2025-05-28T23:59:59-04:00", "filter": "", "limit": 10}}
 
 User: "Anything happening this weekend?"
 → {{"applicable": true, "type": "both", "date_from": "2025-05-31T00:00:00-04:00",
