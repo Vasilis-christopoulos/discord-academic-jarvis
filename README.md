@@ -8,7 +8,7 @@ This project is a comprehensive academic assistant bot that integrates multiple 
 
 **⚠️ Status**: This is a portfolio project showcasing modern AI/ML and cloud architecture. It has not been deployed to production due to ongoing cost and maintenance considerations.
 
-**▶️ Watch the DEMO**: [https://youtu.be/kZbkWvuAKgg]
+**▶️ Watch the DEMO**: [YouTube](https://youtu.be/kZbkWvuAKgg)
 
 ## 🏗️ System Architecture
 
